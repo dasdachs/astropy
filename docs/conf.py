@@ -27,27 +27,15 @@
 
 from datetime import datetime
 import os
-ON_RTD = os.environ.get('READTHEDOCS') == 'True'
-ON_TRAVIS = os.environ.get('TRAVIS') == 'true'
-
-try:
-    import astropy_helpers
-except ImportError:
-    # Building from inside the docs/ directory?
-    import os
-    import sys
-    if os.path.basename(os.getcwd()) == 'docs':
-        a_h_path = os.path.abspath(os.path.join('..', 'astropy_helpers'))
-        if os.path.isdir(a_h_path):
-            sys.path.insert(1, a_h_path)
-
-    # If that doesn't work trying to import from astropy_helpers below will
-    # still blow up
-
-# Load all of the global Astropy configuration
-from astropy_helpers.sphinx.conf import *
+import sys
 
 import astropy
+
+try:
+    from sphinx_astropy.conf.v1 import *  # noqa
+except ImportError:
+    print('ERROR: the documentation requires the sphinx-astropy package to be installed')
+    sys.exit(1)
 
 plot_rcparams = {}
 plot_rcparams['figure.figsize'] = (6, 6)
@@ -89,6 +77,7 @@ intersphinx_mapping['h5py'] = ('http://docs.h5py.org/en/stable/', None)
 # directories to ignore when looking for source files.
 exclude_patterns.append('_templates')
 exclude_patterns.append('_pkgtemplate.rst')
+exclude_patterns.append('**/*.inc.rst')  # .inc.rst mean *include* files, don't have sphinx process them
 
 # Add any paths that contain templates here, relative to this directory.
 if 'templates_path' not in locals():  # in case parent conf.py defines it
@@ -173,6 +162,10 @@ html_title = '{0} v{1}'.format(project, release)
 # Output file base name for HTML help builder.
 htmlhelp_basename = project + 'doc'
 
+# A dictionary of values to pass into the template engine’s context for all pages.
+html_context = {
+    'to_be_indexed': ['stable', 'latest']
+}
 
 # -- Options for LaTeX output --------------------------------------------------
 
@@ -194,7 +187,7 @@ man_pages = [('index', project.lower(), project + u' Documentation',
 
 # -- Options for the edit_on_github extension ----------------------------------------
 
-extensions += ['astropy_helpers.sphinx.ext.edit_on_github']
+extensions += ['sphinx_astropy.ext.edit_on_github']
 
 # Don't import the module as "version" or it will override the
 # "version" configuration parameter
