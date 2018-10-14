@@ -12,6 +12,7 @@
 
 {% extends "!layout.html" %}
 {%- block extrahead %} 
+  <p>Version slug: { version_slug }</p>
   {% if version_slug != "stable" and version_slug != "latest"  %}
   <meta name="robots" content="noindex, nofollow">
   {% endif %}
