@@ -12,7 +12,7 @@
 
 {% extends "!layout.html" %}
 {%- block extrahead %} 
-  {% if version_slug != "stable" or version_slug != "latest"  %}
+  {% if version_slug != "stable" and version_slug != "latest"  %}
   <meta name="robots" content="noindex, nofollow">
   {% endif %}
   {{ super()  }}
