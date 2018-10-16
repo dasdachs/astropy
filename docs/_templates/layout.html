@@ -16,7 +16,7 @@
    https://github.com/rtfd/readthedocs.org/blob/master/readthedocs/builds/version_slug.py
 #}
 
-{% extends "layout.html" %}
+{% extends "!layout.html" %}
 {%- block extrahead %}
   {% if not version_slug in to_be_indexed  %}
   <meta name="robots" content="noindex, nofollow">
