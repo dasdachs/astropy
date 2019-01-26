@@ -10,11 +10,11 @@ import pytest
 import numpy as np
 from numpy import ma
 
-from ....table import Table, MaskedColumn
-from ... import ascii
-from ...ascii.core import ParameterError, FastOptionsError, InconsistentTableError
-from ...ascii.cparser import CParserError
-from ..fastbasic import (
+from astropy.table import Table, MaskedColumn
+from astropy.io import ascii
+from astropy.io.ascii.core import ParameterError, FastOptionsError, InconsistentTableError
+from astropy.io.ascii.cparser import CParserError
+from astropy.io.ascii.fastbasic import (
     FastBasic, FastCsv, FastTab, FastCommentedHeader, FastRdb, FastNoHeader)
 from .common import assert_equal, assert_almost_equal, assert_true
 
@@ -308,6 +308,43 @@ A B C D E F G H
                        exclude_names=['B', 'F'], parallel=parallel)
     expected = Table([[1, 9], [4, 12], [8, 16]], names=('A', 'D', 'H'))
     assert_table_equal(table, expected)
+
+
+def test_doubled_quotes(read_csv):
+    """
+    Test #8283 (fix for #8281), parsing doubled-quotes "ab""cd" in a quoted
+    field was incorrect.
+
+    """
+    tbl = '\n'.join(['a,b',
+                     '"d""","d""q"',
+                     '"""q",""""'])
+    expected = Table([['d"', '"q'],
+                      ['d"q', '"']],
+                     names=('a', 'b'))
+
+    dat = read_csv(tbl)
+    assert_table_equal(dat, expected)
+
+    # In addition to the local read_csv wrapper, check that default
+    # parsing with guessing gives the right answer.
+    for fast_reader in True, False:
+        dat = ascii.read(tbl, fast_reader=fast_reader)
+        assert_table_equal(dat, expected)
+
+
+def test_doubled_quotes_segv():
+    """
+    Test the exact example from #8281 which resulted in SEGV prior to #8283
+    (in contrast to the tests above that just gave the wrong answer).
+    Attempts to produce a more minimal example were unsuccessful, so the whole
+    thing is included.
+    """
+    tbl = """\
+"ID","TIMESTAMP","addendum_id","bib_reference","bib_reference_url","client_application","client_category","client_sort_key","color","coordsys","creator","creator_did","data_pixel_bitpix","dataproduct_subtype","dataproduct_type","em_max","em_min","format","hips_builder","hips_copyright","hips_creation_date","hips_creation_date_1","hips_creator","hips_data_range","hips_estsize","hips_frame","hips_glu_tag","hips_hierarchy","hips_initial_dec","hips_initial_fov","hips_initial_ra","hips_lon_asc","hips_master_url","hips_order","hips_order_1","hips_order_4","hips_order_min","hips_overlay","hips_pixel_bitpix","hips_pixel_cut","hips_pixel_scale","hips_progenitor_url","hips_publisher","hips_release_date","hips_release_date_1","hips_rgb_blue","hips_rgb_green","hips_rgb_red","hips_sampling","hips_service_url","hips_service_url_1","hips_service_url_2","hips_service_url_3","hips_service_url_4","hips_service_url_5","hips_service_url_6","hips_service_url_7","hips_service_url_8","hips_skyval","hips_skyval_method","hips_skyval_value","hips_status","hips_status_1","hips_status_2","hips_status_3","hips_status_4","hips_status_5","hips_status_6","hips_status_7","hips_status_8","hips_tile_format","hips_tile_format_1","hips_tile_format_4","hips_tile_width","hips_version","hipsgen_date","hipsgen_date_1","hipsgen_date_10","hipsgen_date_11","hipsgen_date_12","hipsgen_date_2","hipsgen_date_3","hipsgen_date_4","hipsgen_date_5","hipsgen_date_6","hipsgen_date_7","hipsgen_date_8","hipsgen_date_9","hipsgen_params","hipsgen_params_1","hipsgen_params_10","hipsgen_params_11","hipsgen_params_12","hipsgen_params_2","hipsgen_params_3","hipsgen_params_4","hipsgen_params_5","hipsgen_params_6","hipsgen_params_7","hipsgen_params_8","hipsgen_params_9","label","maxOrder","moc_access_url","moc_order","moc_release_date","moc_sky_fraction","obs_ack","obs_collection","obs_copyrigh_url","obs_copyright","obs_copyright_1","obs_copyright_url","obs_copyright_url_1","obs_description","obs_description_url","obs_descrition_url","obs_id","obs_initial_dec","obs_initial_fov","obs_initial_ra","obs_provenance","obs_regime","obs_title","ohips_frame","pixelCut","pixelRange","prov_did","prov_progenitor","prov_progenitor_url","publisher_did","publisher_id","s_pixel_scale","t_max","t_min"
+"CDS/P/2MASS/H","1524123841000","","2006AJ....131.1163S","http://cdsbib.u-strasbg.fr/cgi-bin/cdsbib?2006AJ....131.1163S","AladinDesktop","Image/Infrared/2MASS","04-001-03","","","","ivo://CDS/P/2MASS/H","","","image","1.798E-6","1.525E-6","","Aladin/HipsGen v9.017","CNRS/Unistra","2013-05-06T20:36Z","","CDS (A.Oberto)","","","equatorial","","mean","","","","","","9","","","","","","0 60","2.236E-4","","","2016-04-22T13:48Z","","","","","","http://alasky.u-strasbg.fr/2MASS/H","https://irsa.ipac.caltech.edu/data/hips/CDS/2MASS/H","http://alaskybis.u-strasbg.fr/2MASS/H","https://alaskybis.u-strasbg.fr/2MASS/H","","","","","","","","","public master clonableOnce","public mirror unclonable","public mirror clonableOnce","public mirror clonableOnce","","","","","","jpeg fits","","","512","1.31","","","","","","","","","","","","","","","","","","","","","","","","","","","","","http://alasky.u-strasbg.fr/2MASS/H/Moc.fits","9","","1","University of Massachusetts & IPAC/Caltech","The Two Micron All Sky Survey - H band (2MASS H)","","University of Massachusetts & IPAC/Caltech","","http://www.ipac.caltech.edu/2mass/","","2MASS has uniformly scanned the entire sky in three near-infrared bands to detect and characterize point sources brighter than about 1 mJy in each band, with signal-to-noise ratio (SNR) greater than 10, using a pixel size of 2.0"". This has achieved an 80,000-fold improvement in sensitivity relative to earlier surveys. 2MASS used two highly-automated 1.3-m telescopes, one at Mt. Hopkins, AZ, and one at CTIO, Chile. Each telescope was equipped with a three-channel camera, each channel consisting of a 256x256 array of HgCdTe detectors, capable of observing the sky simultaneously at J (1.25 microns), H (1.65 microns), and Ks (2.17 microns). The University of Massachusetts (UMass) was responsible for the overall management of the project, and for developing the infrared cameras and on-site computing systems at both facilities. The Infrared Processing and Analysis Center (IPAC) is responsible for all data processing through the Production Pipeline, and construction and distribution of the data products. Funding is provided primarily by NASA and the NSF","","","","+0","0.11451621372724685","0","","Infrared","2MASS H (1.66um)","","","","","IPAC/NASA","","","","","51941","50600"
+"""
+    ascii.read(tbl, format='csv', fast_reader=True, guess=False)
 
 
 @pytest.mark.parametrize("parallel", [True, False])
@@ -959,6 +996,35 @@ def test_read_big_table(tmpdir):
     assert len(t) == NB_ROWS
 
 
+@pytest.mark.skipif(not os.getenv('TEST_READ_HUGE_FILE'),
+                    reason='Environment variable TEST_READ_HUGE_FILE must be '
+                    'defined to run this test')
+def test_read_big_table2(tmpdir):
+    """Test reading of a file with a huge column.
+    """
+    # (2**32 // 2) : max value for int
+    # // 10 : we use a value for rows that have 10 chars (1e9)
+    # + 5 : add a few lines so the length cannot be stored by an int
+    NB_ROWS = (2**32 // 2) // 10 + 5
+    filename = str(tmpdir.join("big_table.csv"))
+
+    print("Creating a {} rows table.".format(NB_ROWS))
+    data = np.full(2**32 // 2 // 10 + 5, int(1e9), dtype=np.int32)
+    t = Table(data=[data], names=['a'], copy=False)
+
+    print("Saving the table to {}".format(filename))
+    t.write(filename, format='ascii.csv', overwrite=True)
+    t = None
+
+    print("Counting the number of lines in the csv, it should be {}"
+          " + 1 (header).".format(NB_ROWS))
+    assert sum(1 for line in open(filename)) == NB_ROWS + 1
+
+    print("Reading the file with astropy.")
+    t = Table.read(filename, format='ascii.csv', fast_reader=True)
+    assert len(t) == NB_ROWS
+
+
 # Test these both with guessing turned on and off
 @pytest.mark.parametrize("guess", [True, False])
 # fast_reader configurations: False| 'use_fast_converter'=False|True
@@ -1179,7 +1245,7 @@ def test_fortran_invalid_exp(parallel, guess):
 
         read_values = [col[0] for col in t5.itercols()]
         if os.name == 'nt':
-            # Apparently C strtod() on (some?) MSVC recognises 'd' exponents!
+            # Apparently C strtod() on (some?) MSVC recognizes 'd' exponents!
             assert read_values == vals_v or read_values == vals_e
         else:
             assert read_values == vals_e
@@ -1267,3 +1333,25 @@ def test_dict_kwarg_integrity(fast_reader, guess):
     t = ascii.read(StringIO(' '.join(fields)), guess=guess,
                    fast_reader=fast_reader)
     assert fast_reader.get('exponent_style', None) == expstyle
+
+
+@pytest.mark.parametrize('fast_reader', [False,
+                                         dict(parallel=True),
+                                         dict(parallel=False)])
+def test_read_empty_basic_table_with_comments(fast_reader):
+    """
+    Test for reading a "basic" format table that has no data but has comments.
+    Tests the fix for #8267.
+    """
+    dat = """
+    # comment 1
+    # comment 2
+    col1 col2
+    """
+    if os.name == 'nt' and fast_reader and fast_reader.get('parallel'):
+        pytest.xfail("Multiprocessing is currently unsupported on Windows")
+
+    t = ascii.read(dat, fast_reader=fast_reader)
+    assert t.meta['comments'] == ['comment 1', 'comment 2']
+    assert len(t) == 0
+    assert t.colnames == ['col1', 'col2']

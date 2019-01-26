@@ -16,9 +16,13 @@ list of table lines.  The return value (``data`` in this case) is a :ref:`Table
 <astropy-table>` object.
 
 By default |read| will try to `guess the table format <#guess-table-format>`_
-by trying all the supported formats.  If this does not work (for unusually
-formatted tables) then one needs give `astropy.io.ascii` additional hints about the
-format, for example::
+by trying all the supported formats.  Guessing the file format is often slow
+for large files because the reader simply tries parsing the file with every
+allowed format until one succeeds.  For large files it is recommended to
+disable guessing with ``guess=False``.
+
+If guessing does not work (for unusually formatted tables) then one needs give
+`astropy.io.ascii` additional hints about the format, for example::
 
    >>> data = astropy.io.ascii.read('t/nls1_stackinfo.dbout', data_start=2, delimiter='|')  # doctest: +SKIP
    >>> data = astropy.io.ascii.read('t/simple.txt', quotechar="'")  # doctest: +SKIP
@@ -249,7 +253,7 @@ When reading a table the second element of a ``<missing_spec>`` should always
 be the string ``'0'``,
 otherwise you may get unexpected behavior [#f1]_.  By default the
 ``<missing_spec>`` is applied to all columns unless column name strings are
-supplied.  An alterate way to limit the columns is via the
+supplied.  An alternate way to limit the columns is via the
 ``fill_include_names`` and ``fill_exclude_names`` keyword arguments in |read|.
 
 In the example below we read back the weather table after filling the missing
@@ -643,7 +647,7 @@ these sub-tables and then stack them at the end.
 .. Note:: **Performance**
 
   Specifying the ``format`` explicitly and using ``guess=False`` is a good idea
-  for large tables.  This prevent unneccesary guessing in the typical case
+  for large tables.  This prevent unnecessary guessing in the typical case
   where the format is already known.
 
   The ``chunk_size`` should generally be set to the largest value that is 

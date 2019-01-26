@@ -19,16 +19,16 @@ from itertools import islice
 
 import numpy as np
 
-from ... import __version__
+from astropy import __version__
 
 from .card import Card, BLANK_CARD
 from .header import Header
-from ...utils.decorators import deprecated_renamed_argument
+from astropy.utils.decorators import deprecated_renamed_argument
 # HDUList is used in one of the doctests
 from .hdu.hdulist import fitsopen, HDUList  # pylint: disable=W0611
 from .hdu.table import _TableLikeHDU
-from ...utils.exceptions import AstropyDeprecationWarning
-from ...utils.diff import (report_diff_values, fixed_width_indent,
+from astropy.utils.exceptions import AstropyDeprecationWarning
+from astropy.utils.diff import (report_diff_values, fixed_width_indent,
                            where_not_allclose, diff_values)
 
 __all__ = ['FITSDiff', 'HDUDiff', 'HeaderDiff', 'ImageDataDiff', 'RawDataDiff',
@@ -334,6 +334,17 @@ class FITSDiff(_BaseDiff):
         if len(self.a) != len(self.b):
             self.diff_hdu_count = (len(self.a), len(self.b))
 
+        # Record filenames for use later in _report
+        self.filenamea = self.a.filename()
+        if not self.filenamea:
+            self.filenamea = '<{} object at {:#x}>'.format(
+                self.a.__class__.__name__, id(self.a))
+
+        self.filenameb = self.b.filename()
+        if not self.filenameb:
+            self.filenameb = '<{} object at {:#x}>'.format(
+                self.b.__class__.__name__, id(self.b))
+
         if self.ignore_hdus:
             self.a = HDUList([h for h in self.a if h.name not in self.ignore_hdus])
             self.b = HDUList([h for h in self.b if h.name not in self.ignore_hdus])
@@ -361,20 +372,9 @@ class FITSDiff(_BaseDiff):
         wrapper = textwrap.TextWrapper(initial_indent='  ',
                                        subsequent_indent='  ')
 
-        # print out heading and parameter values
-        filenamea = self.a.filename()
-        if not filenamea:
-            filenamea = '<{} object at {:#x}>'.format(
-                self.a.__class__.__name__, id(self.a))
-
-        filenameb = self.b.filename()
-        if not filenameb:
-            filenameb = '<{} object at {:#x}>'.format(
-                self.b.__class__.__name__, id(self.b))
-
         self._fileobj.write('\n')
         self._writeln(' fitsdiff: {}'.format(__version__))
-        self._writeln(' a: {}\n b: {}'.format(filenamea, filenameb))
+        self._writeln(' a: {}\n b: {}'.format(self.filenamea, self.filenameb))
 
         if self.ignore_hdus:
             ignore_hdus = ' '.join(sorted(self.ignore_hdus))

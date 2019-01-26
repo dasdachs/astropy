@@ -2,16 +2,16 @@
 import pytest
 import numpy as np
 
-from ..column import Column
-from ..diff import (FITSDiff, HeaderDiff, ImageDataDiff, TableDataDiff,
+from astropy.io.fits.column import Column
+from astropy.io.fits.diff import (FITSDiff, HeaderDiff, ImageDataDiff, TableDataDiff,
                     HDUDiff)
-from ..hdu import HDUList, PrimaryHDU, ImageHDU
-from ..hdu.table import BinTableHDU
-from ..header import Header
+from astropy.io.fits.hdu import HDUList, PrimaryHDU, ImageHDU
+from astropy.io.fits.hdu.table import BinTableHDU
+from astropy.io.fits.header import Header
 
-from ....tests.helper import catch_warnings
-from ....utils.exceptions import AstropyDeprecationWarning
-from ....io import fits
+from astropy.tests.helper import catch_warnings
+from astropy.utils.exceptions import AstropyDeprecationWarning
+from astropy.io import fits
 
 from . import FitsTestCase
 
@@ -777,7 +777,8 @@ class TestDiff(FitsTestCase):
         diffobj = HeaderDiff(ha, hb)
         diffobj.report(fileobj=outpath)
         report_as_string = diffobj.report()
-        assert open(outpath).read() == report_as_string
+        with open(outpath) as fout:
+            assert fout.read() == report_as_string
 
     def test_file_output_overwrite_safety(self):
         outpath = self.temp('diff_output.txt')
@@ -799,8 +800,9 @@ class TestDiff(FitsTestCase):
         diffobj.report(fileobj=outpath)
         report_as_string = diffobj.report()
         diffobj.report(fileobj=outpath, overwrite=True)
-        assert open(outpath).read() == report_as_string, (
-            "overwritten output file is not identical to report string")
+        with open(outpath) as fout:
+            assert fout.read() == report_as_string, (
+                "overwritten output file is not identical to report string")
 
     def test_file_output_overwrite_vs_clobber(self):
         """Verify uses of clobber and overwrite."""

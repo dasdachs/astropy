@@ -17,11 +17,11 @@ import warnings
 import numpy as np
 
 # Project
-from ..utils.compat.misc import override__dir__
-from ..utils.decorators import lazyproperty, format_doc
-from ..utils.exceptions import AstropyWarning
-from .. import units as u
-from ..utils import (OrderedDescriptorContainer, ShapedLikeNDArray,
+from astropy.utils.compat.misc import override__dir__
+from astropy.utils.decorators import lazyproperty, format_doc
+from astropy.utils.exceptions import AstropyWarning, AstropyDeprecationWarning
+from astropy import units as u
+from astropy.utils import (OrderedDescriptorContainer, ShapedLikeNDArray,
                      check_broadcast)
 from .transformations import TransformGraph
 from . import representation as r
@@ -120,6 +120,13 @@ def _get_repr_classes(base, **differentials):
     return repr_classes
 
 
+def _representation_deprecation():
+    """
+    Raises a deprecation warning for the "representation" keyword
+    """
+    warnings.warn('The `representation` keyword/property name is deprecated in '
+                  'favor of `representation_type`', AstropyDeprecationWarning)
+
 def _normalize_representation_type(kwargs):
     """ This is added for backwards compatibility: if the user specifies the
     old-style argument ``representation``, add it back in to the kwargs dict
@@ -131,6 +138,7 @@ def _normalize_representation_type(kwargs):
                              "were passed to a frame initializer. Please use "
                              "only `representation_type` (`representation` is "
                              "now pending deprecation).")
+        _representation_deprecation()
         kwargs['representation_type'] = kwargs.pop('representation')
 
 
@@ -280,6 +288,11 @@ class FrameMeta(OrderedDescriptorContainer, abc.ABCMeta):
         if 'name' not in members:
             members['name'] = name.lower()
 
+         # A cache that *must be unique to each frame class* - it is
+         # insufficient to share them with superclasses, hence the need to put
+         # them in the meta
+        members['_frame_class_cache'] = {}
+
         return super().__new__(mcls, name, bases, members)
 
     @staticmethod
@@ -404,7 +417,6 @@ class BaseCoordinateFrame(ShapedLikeNDArray, metaclass=FrameMeta):
 
         # This is here for backwards compatibility. It should be possible
         # to use either the kwarg representation_type, or representation.
-        # TODO: In future versions, we will raise a deprecation warning here:
         if representation_type is not None:
             kwargs['representation_type'] = representation_type
         _normalize_representation_type(kwargs)
@@ -755,13 +767,15 @@ class BaseCoordinateFrame(ShapedLikeNDArray, metaclass=FrameMeta):
     def differential_type(self, value):
         self.set_representation_cls(s=value)
 
-    # TODO: deprecate these?
+    # TODO: remove these in a future version
     @property
     def representation(self):
+        _representation_deprecation()
         return self.representation_type
 
     @representation.setter
     def representation(self, value):
+        _representation_deprecation()
         self.representation_type = value
 
     @classmethod
@@ -769,44 +783,49 @@ class BaseCoordinateFrame(ShapedLikeNDArray, metaclass=FrameMeta):
         # This exists as a class method only to support handling frame inputs
         # without units, which are deprecated and will be removed.  This can be
         # moved into the representation_info property at that time.
+        # note that if so moved, the cache should be acceessed as
+        # self.__class__._frame_class_cache
 
-        repr_attrs = {}
-        for repr_diff_cls in (list(r.REPRESENTATION_CLASSES.values()) +
-                              list(r.DIFFERENTIAL_CLASSES.values())):
-            repr_attrs[repr_diff_cls] = {'names': [], 'units': []}
-            for c, c_cls in repr_diff_cls.attr_classes.items():
-                repr_attrs[repr_diff_cls]['names'].append(c)
-                # TODO: when "recommended_units" is removed, just directly use
-                # the default part here.
-                rec_unit = repr_diff_cls._recommended_units.get(
-                    c, u.deg if issubclass(c_cls, Angle) else None)
-                repr_attrs[repr_diff_cls]['units'].append(rec_unit)
+        if cls._frame_class_cache.get('last_reprdiff_hash', None) != r.get_reprdiff_cls_hash():
+            repr_attrs = {}
+            for repr_diff_cls in (list(r.REPRESENTATION_CLASSES.values()) +
+                                  list(r.DIFFERENTIAL_CLASSES.values())):
+                repr_attrs[repr_diff_cls] = {'names': [], 'units': []}
+                for c, c_cls in repr_diff_cls.attr_classes.items():
+                    repr_attrs[repr_diff_cls]['names'].append(c)
+                    # TODO: when "recommended_units" is removed, just directly use
+                    # the default part here.
+                    rec_unit = repr_diff_cls._recommended_units.get(
+                        c, u.deg if issubclass(c_cls, Angle) else None)
+                    repr_attrs[repr_diff_cls]['units'].append(rec_unit)
 
-        for repr_diff_cls, mappings in cls._frame_specific_representation_info.items():
+            for repr_diff_cls, mappings in cls._frame_specific_representation_info.items():
 
-            # take the 'names' and 'units' tuples from repr_attrs,
-            # and then use the RepresentationMapping objects
-            # to update as needed for this frame.
-            nms = repr_attrs[repr_diff_cls]['names']
-            uns = repr_attrs[repr_diff_cls]['units']
-            comptomap = dict([(m.reprname, m) for m in mappings])
-            for i, c in enumerate(repr_diff_cls.attr_classes.keys()):
-                if c in comptomap:
-                    mapp = comptomap[c]
-                    nms[i] = mapp.framename
+                # take the 'names' and 'units' tuples from repr_attrs,
+                # and then use the RepresentationMapping objects
+                # to update as needed for this frame.
+                nms = repr_attrs[repr_diff_cls]['names']
+                uns = repr_attrs[repr_diff_cls]['units']
+                comptomap = dict([(m.reprname, m) for m in mappings])
+                for i, c in enumerate(repr_diff_cls.attr_classes.keys()):
+                    if c in comptomap:
+                        mapp = comptomap[c]
+                        nms[i] = mapp.framename
 
-                    # need the isinstance because otherwise if it's a unit it
-                    # will try to compare to the unit string representation
-                    if not (isinstance(mapp.defaultunit, str) and
-                            mapp.defaultunit == 'recommended'):
-                        uns[i] = mapp.defaultunit
-                        # else we just leave it as recommended_units says above
+                        # need the isinstance because otherwise if it's a unit it
+                        # will try to compare to the unit string representation
+                        if not (isinstance(mapp.defaultunit, str) and
+                                mapp.defaultunit == 'recommended'):
+                            uns[i] = mapp.defaultunit
+                            # else we just leave it as recommended_units says above
 
-            # Convert to tuples so that this can't mess with frame internals
-            repr_attrs[repr_diff_cls]['names'] = tuple(nms)
-            repr_attrs[repr_diff_cls]['units'] = tuple(uns)
+                # Convert to tuples so that this can't mess with frame internals
+                repr_attrs[repr_diff_cls]['names'] = tuple(nms)
+                repr_attrs[repr_diff_cls]['units'] = tuple(uns)
 
-        return repr_attrs
+            cls._frame_class_cache['representation_info'] = repr_attrs
+            cls._frame_class_cache['last_reprdiff_hash'] = r.get_reprdiff_cls_hash()
+        return cls._frame_class_cache['representation_info']
 
     @lazyproperty
     def representation_info(self):
@@ -889,7 +908,7 @@ class BaseCoordinateFrame(ShapedLikeNDArray, metaclass=FrameMeta):
         Return a replica of the frame, optionally with new frame attributes.
 
         The replica is a new frame object that has the same data as this frame
-        object and with frame attributes overriden if they are provided as extra
+        object and with frame attributes overridden if they are provided as extra
         keyword arguments to this method. If ``copy`` is set to `True` then a
         copy of the internal arrays will be made.  Otherwise the replica will
         use a reference to the original arrays when possible to save memory. The
@@ -918,7 +937,7 @@ class BaseCoordinateFrame(ShapedLikeNDArray, metaclass=FrameMeta):
         Return a replica without data, optionally with new frame attributes.
 
         The replica is a new frame object without data but with the same frame
-        attributes as this object, except where overriden by extra keyword
+        attributes as this object, except where overridden by extra keyword
         arguments to this method.  The ``copy`` keyword determines if the frame
         attributes are truly copied vs being references (which saves memory for
         cases where frame attributes are large).
@@ -942,24 +961,24 @@ class BaseCoordinateFrame(ShapedLikeNDArray, metaclass=FrameMeta):
         """
         return self._replicate(None, copy=copy, **kwargs)
 
-    def realize_frame(self, representation_type):
+    def realize_frame(self, data):
         """
-        Generates a new frame *with new data* from another frame (which may or
+        Generates a new frame with new data from another frame (which may or
         may not have data). Roughly speaking, the converse of
         `replicate_without_data`.
 
         Parameters
         ----------
-        representation_type : `BaseRepresentation`
+        data : `BaseRepresentation`
             The representation to use as the data for the new frame.
 
         Returns
         -------
         frameobj : same as this frame
             A new object with the same frame attributes as this one, but
-            with the ``representation`` as the data.
+            with the ``data`` as the coordinate data.
         """
-        return self._replicate(representation_type)
+        return self._replicate(data)
 
     def represent_as(self, base, s='base', in_frame_units=False):
         """
@@ -1005,7 +1024,7 @@ class BaseCoordinateFrame(ShapedLikeNDArray, metaclass=FrameMeta):
         <CartesianRepresentation (x, y, z) [dimensionless]
                 (1., 0., 0.)>
 
-        >>> coord.representation = CartesianRepresentation
+        >>> coord.representation_type = CartesianRepresentation
         >>> coord  # doctest: +FLOAT_CMP
         <SkyCoord (ICRS): (x, y, z) [dimensionless]
             (1., 0., 0.)>
@@ -1229,6 +1248,49 @@ class BaseCoordinateFrame(ShapedLikeNDArray, metaclass=FrameMeta):
         """
         return attrnm in self._attr_names_with_defaults
 
+    @staticmethod
+    def _frameattr_equiv(left_fattr, right_fattr):
+        """
+        Determine if two frame attributes are equivalent.  Implemented as a
+        staticmethod mainly as a convenient location, althought conceivable it
+        might be desirable for subclasses to override this behavior.
+
+        Primary purpose is to check for equality of representations, since by
+        default representation equality is only "is it the same object", which
+        is too strict for frame comparisons.
+
+        Note: this method may be removed when/if representations have an
+        appropriate equality defined.
+        """
+        if isinstance(left_fattr, r.BaseRepresentationOrDifferential):
+            if left_fattr is right_fattr:
+                # shortcut if it's exactly the same object
+                return True
+            elif isinstance(right_fattr, r.BaseRepresentationOrDifferential):
+                # both are representations.
+                if ((hasattr(left_fattr, 'differentials') and left_fattr.differentials) or
+                    hasattr(right_fattr, 'differentials') and right_fattr.differentials):
+                    warnings.warn('Two representation frame attributes were '
+                                  'checked for equivalence when at least one of'
+                                  ' them has differentials.  This yields False '
+                                  'even if the underlying representations are '
+                                  'equivalent (although this may change in '
+                                  'future versions of Astropy)', AstropyWarning)
+                    return False
+                if isinstance(right_fattr, left_fattr.__class__):
+                    # if same representation type, compare components.
+                    return np.all([(getattr(left_fattr, comp) ==
+                                    getattr(right_fattr, comp))
+                                   for comp in left_fattr.components])
+                else:
+                    # convert to cartesian and see if they match
+                    return np.all(left_fattr.to_cartesian().xyz ==
+                                  right_fattr.to_cartesian().xyz)
+            else:
+                return False
+        else:
+            return np.all(left_fattr == right_fattr)
+
     def is_equivalent_frame(self, other):
         """
         Checks if this object is the same frame as the ``other`` object.
@@ -1254,8 +1316,8 @@ class BaseCoordinateFrame(ShapedLikeNDArray, metaclass=FrameMeta):
         """
         if self.__class__ == other.__class__:
             for frame_attr_name in self.get_frame_attr_names():
-                if np.any(getattr(self, frame_attr_name) !=
-                          getattr(other, frame_attr_name)):
+                if not self._frameattr_equiv(getattr(self, frame_attr_name),
+                                             getattr(other, frame_attr_name)):
                     return False
             return True
         elif not isinstance(other, BaseCoordinateFrame):
@@ -1284,12 +1346,12 @@ class BaseCoordinateFrame(ShapedLikeNDArray, metaclass=FrameMeta):
         if not self.has_data:
             return ''
 
-        if self.representation:
-            if (hasattr(self.representation, '_unit_representation') and
-                    isinstance(self.data, self.representation._unit_representation)):
+        if self.representation_type:
+            if (hasattr(self.representation_type, '_unit_representation') and
+                    isinstance(self.data, self.representation_type._unit_representation)):
                 rep_cls = self.data.__class__
             else:
-                rep_cls = self.representation
+                rep_cls = self.representation_type
 
             if 's' in self.data.differentials:
                 dif_cls = self.get_representation_cls('s')
@@ -1339,8 +1401,21 @@ class BaseCoordinateFrame(ShapedLikeNDArray, metaclass=FrameMeta):
         """
         Returns a string representation of the frame's attributes, if any.
         """
-        return ', '.join([attrnm + '=' + str(getattr(self, attrnm))
-                          for attrnm in self.get_frame_attr_names()])
+        attr_strs = []
+        for attribute_name in self.get_frame_attr_names():
+            attr = getattr(self, attribute_name)
+            # Check to see if this object has a way of representing itself
+            # specific to being an attribute of a frame. (Note, this is not the
+            # Attribute class, it's the actual object).
+            if hasattr(attr, "_astropy_repr_in_frame"):
+                attrstr = attr._astropy_repr_in_frame()
+            else:
+                attrstr = str(attr)
+            attr_strs.append("{attribute_name}={attrstr}".format(
+                attribute_name=attribute_name,
+                attrstr=attrstr))
+
+        return ', '.join(attr_strs)
 
     def _apply(self, method, *args, **kwargs):
         """Create a new instance, applying a method to the underlying data.
@@ -1491,7 +1566,7 @@ class BaseCoordinateFrame(ShapedLikeNDArray, metaclass=FrameMeta):
 
             If the ``other`` coordinate object is in a different frame, it is
             first transformed to the frame of this object. This can lead to
-            unintutive behavior if not accounted for. Particularly of note is
+            unintuitive behavior if not accounted for. Particularly of note is
             that ``self.separation(other)`` and ``other.separation(self)`` may
             not give the same answer in this case.
 

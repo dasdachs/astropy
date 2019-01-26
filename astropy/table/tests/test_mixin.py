@@ -21,14 +21,14 @@ from io import StringIO
 import pytest
 import numpy as np
 
-from ...coordinates import EarthLocation
-from ...table import Table, QTable, join, hstack, vstack, Column, NdarrayMixin
-from ...table import serialize
-from ... import time
-from ... import coordinates
-from ... import units as u
-from ..column import BaseColumn
-from .. import table_helpers
+from astropy.coordinates import EarthLocation
+from astropy.table import Table, QTable, join, hstack, vstack, Column, NdarrayMixin
+from astropy.table import serialize
+from astropy import time
+from astropy import coordinates
+from astropy import units as u
+from astropy.table.column import BaseColumn
+from astropy.table import table_helpers
 from .conftest import MIXIN_COLS
 
 
@@ -100,7 +100,7 @@ def test_io_ascii_write():
     every pure Python writer.  No validation of the output is done,
     this just confirms no exceptions.
     """
-    from ...io.ascii.connect import _get_connectors_table
+    from astropy.io.ascii.connect import _get_connectors_table
     t = QTable(MIXIN_COLS)
     for fmt in _get_connectors_table():
         if fmt['Format'] == 'ascii.ecsv' and not HAS_YAML:
@@ -487,7 +487,7 @@ def test_insert_row(mixin_cols):
     """
     t = QTable(mixin_cols)
     t['m'].info.description = 'd'
-    if isinstance(t['m'], (u.Quantity, Column)):
+    if isinstance(t['m'], (u.Quantity, Column, time.Time)):
         t.insert_row(1, t[-1])
         assert t[1] == t[-1]
         assert t['m'].info.description == 'd'
@@ -596,7 +596,7 @@ def test_skycoord_representation():
     values are output and in changing the frame representation.
     """
     # With no unit we get "None" in the unit row
-    c = coordinates.SkyCoord([0], [1], [0], representation='cartesian')
+    c = coordinates.SkyCoord([0], [1], [0], representation_type='cartesian')
     t = Table([c])
     assert t.pformat() == ['     col0     ',
                            'None,None,None',
@@ -604,20 +604,20 @@ def test_skycoord_representation():
                            '   0.0,1.0,0.0']
 
     # Test that info works with a dynamically changed representation
-    c = coordinates.SkyCoord([0], [1], [0], unit='m', representation='cartesian')
+    c = coordinates.SkyCoord([0], [1], [0], unit='m', representation_type='cartesian')
     t = Table([c])
     assert t.pformat() == ['    col0   ',
                            '   m,m,m   ',
                            '-----------',
                            '0.0,1.0,0.0']
 
-    t['col0'].representation = 'unitspherical'
+    t['col0'].representation_type = 'unitspherical'
     assert t.pformat() == ['  col0  ',
                            'deg,deg ',
                            '--------',
                            '90.0,0.0']
 
-    t['col0'].representation = 'cylindrical'
+    t['col0'].representation_type = 'cylindrical'
     assert t.pformat() == ['    col0    ',
                            '  m,deg,m   ',
                            '------------',

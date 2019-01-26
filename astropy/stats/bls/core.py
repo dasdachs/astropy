@@ -5,9 +5,8 @@ __all__ = ["BoxLeastSquares", "BoxLeastSquaresResults"]
 
 import numpy as np
 
-from ...tests.helper import assert_quantity_allclose
-from ... import units
-from ..lombscargle.core import has_units, strip_units
+from astropy import units
+from astropy.stats.lombscargle.core import has_units, strip_units
 
 from . import methods
 
@@ -55,14 +54,14 @@ class BoxLeastSquares(object):
     >>> model = BoxLeastSquares(t, y)
     >>> results = model.autopower(0.16)
     >>> results.period[np.argmax(results.power)]  # doctest: +FLOAT_CMP
-    2.005441310651872
+    1.9923406038842544
 
     Compute the periodogram on a user-specified period grid:
 
     >>> periods = np.linspace(1.9, 2.1, 5)
     >>> results = model.power(periods, 0.16)
     >>> results.power  # doctest: +FLOAT_CMP
-    array([0.01479464, 0.03804835, 0.09640946, 0.05199547, 0.01970484])
+    array([0.01421067, 0.02842475, 0.10867671, 0.05117755, 0.01783253])
 
     If the inputs are AstroPy Quantities with units, the units will be
     validated and the outputs will also be Quantities with appropriate units:
@@ -720,7 +719,7 @@ class BoxLeastSquaresResults(dict):
 
     """
     def __init__(self, *args):
-        super(BoxLeastSquaresResults, self).__init__(zip(
+        super().__init__(zip(
             ("objective", "period", "power", "depth", "depth_err",
              "duration", "transit_time", "depth_snr", "log_likelihood"),
             args
@@ -745,26 +744,3 @@ class BoxLeastSquaresResults(dict):
 
     def __dir__(self):
         return list(self.keys())
-
-    def assert_allclose(self, other, **kwargs):
-        """Assert that another BoxLeastSquaresResults object is consistent
-
-        This method loops over all attributes and compares the values using
-        :func:`~astropy.tests.helper.assert_quantity_allclose` function.
-
-        Parameters
-        ----------
-        other : BoxLeastSquaresResults
-            The other results object to compare.
-
-        """
-        for k, v in self.items():
-            if k not in other:
-                raise AssertionError("missing key '{0}'".format(k))
-            if k == "objective":
-                assert v == other[k], (
-                    "Mismatched objectives. Expected '{0}', got '{1}'"
-                    .format(v, other[k])
-                )
-                continue
-            assert_quantity_allclose(v, other[k], **kwargs)

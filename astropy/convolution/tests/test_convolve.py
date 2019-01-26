@@ -4,9 +4,13 @@ import pytest
 import numpy as np
 import numpy.ma as ma
 
-from ..convolve import convolve, convolve_fft
+from astropy.convolution.convolve import convolve, convolve_fft
+from astropy.convolution.kernels import Gaussian2DKernel
+from astropy.utils.exceptions import AstropyUserWarning
 
-from numpy.testing import assert_array_almost_equal_nulp, assert_array_almost_equal
+from numpy.testing import (assert_array_almost_equal_nulp,
+                           assert_array_almost_equal,
+                           assert_allclose)
 
 import itertools
 
@@ -117,7 +121,7 @@ class TestConvolve1D:
                      normalize_kernel=normalize_kernel, preserve_nan=preserve_nan)
 
         # ( NaN == NaN ) = False
-        # Only compare non NaN values for canonical equivilance
+        # Only compare non NaN values for canonical equivalance
         # and then check NaN explicitly with np.isnan()
         array_is_nan = np.isnan(array)
         kernel_is_nan = np.isnan(kernel)
@@ -894,6 +898,7 @@ def test_astropy_convolution_against_scipy():
     assert_array_almost_equal(fftconvolve(y, x, 'same'),
                               convolve_fft(y, x, normalize_kernel=False))
 
+
 @pytest.mark.skipif('not HAS_PANDAS')
 def test_regression_6099():
     wave = np.array((np.linspace(5000, 5100, 10)))
@@ -905,8 +910,51 @@ def test_regression_6099():
 
     assert_array_almost_equal(nonseries_result, series_result)
 
+
 def test_invalid_array_convolve():
     kernel = np.ones(3)/3.
 
     with pytest.raises(TypeError):
         convolve('glork', kernel)
+
+
+@pytest.mark.parametrize(('boundary'), BOUNDARY_OPTIONS)
+def test_non_square_kernel_asymmetric(boundary):
+    # Regression test for a bug that occurred when using non-square kernels in
+    # 2D when using boundary=None
+    kernel = np.array([[1, 2, 3, 2, 1], [0, 1, 2, 1, 0], [0, 0, 0, 0, 0]])
+    image = np.zeros((13, 13))
+    image[6, 6] = 1
+    result = convolve(image, kernel, normalize_kernel=False, boundary=boundary)
+    assert_allclose(result[5:8, 4:9], kernel)
+
+
+@pytest.mark.parametrize(('boundary', 'normalize_kernel'),
+                         itertools.product(BOUNDARY_OPTIONS,
+                                           NORMALIZE_OPTIONS))
+def test_uninterpolated_nan_regions(boundary, normalize_kernel):
+    #8086
+    # Test NaN interpolation of contiguous NaN regions with kernels of size
+    # identical and greater than that of the region of NaN values.
+
+    # Test case: kernel.shape == NaN_region.shape
+    kernel = Gaussian2DKernel(1, 5, 5)
+    nan_centroid = np.full(kernel.shape, np.nan)
+    image = np.pad(nan_centroid, pad_width=kernel.shape[0]*2, mode='constant',
+                   constant_values=1)
+    with pytest.warns(AstropyUserWarning,
+                      match="nan_treatment='interpolate', however, NaN values detected "
+                      "post convolution. A contiguous region of NaN values, larger "
+                      "than the kernel size, are present in the input array. "
+                      "Increase the kernel size to avoid this."):
+        result = convolve(image, kernel, boundary=boundary, nan_treatment='interpolate',
+                          normalize_kernel=normalize_kernel)
+        assert(np.any(np.isnan(result)))
+
+    # Test case: kernel.shape > NaN_region.shape
+    nan_centroid = np.full((kernel.shape[0]-1, kernel.shape[1]-1), np.nan) # 1 smaller than kerenel
+    image = np.pad(nan_centroid, pad_width=kernel.shape[0]*2, mode='constant',
+                   constant_values=1)
+    result = convolve(image, kernel, boundary=boundary, nan_treatment='interpolate',
+                      normalize_kernel=normalize_kernel)
+    assert(~np.any(np.isnan(result))) # Note: negation

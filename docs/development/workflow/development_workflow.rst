@@ -260,19 +260,7 @@ Astropy you are working on. Do that with:
 
 .. code-block:: bash
 
-    python setup.py develop  # typically python 2.x, not python 3
-
-or:
-
-.. code-block:: bash
-
-    python3 setup.py install # python 3...
-    # ...though python3 may be called python3.3 or just python,
-    # depending on your system.
-
-If you are using python 3 you will need to re-install after making changes to
-the Astropy source code. Re-installing goes much faster than the initial install
-because it typically does not require new compilation.
+    pip install -e .
 
 .. _edit-flow:
 
@@ -451,7 +439,7 @@ the main Astropy *master* repository.
 The decisions of when to request a *squash* or *rebase* are left to
 individual maintainers.  These may be requested to reduce the number of
 visible commits saved in the repository history, or because of code changes
-in Astropy in the meantime.  A rebase may be necessary to allow the Continious
+in Astropy in the meantime.  A rebase may be necessary to allow the Continuous
 Integration tests to run.  Both involve rewriting the `git`_ history, meaning
 that commit hashes will change, which is why you should do it only if asked.
 

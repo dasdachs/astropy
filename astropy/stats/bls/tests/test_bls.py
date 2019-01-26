@@ -5,10 +5,34 @@ import pytest
 import numpy as np
 from numpy.testing import assert_allclose
 
-from .... import units
-from ....tests.helper import assert_quantity_allclose
-from .. import BoxLeastSquares
-from ...lombscargle.core import has_units
+from astropy import units
+from astropy.tests.helper import assert_quantity_allclose
+from astropy.stats.bls import BoxLeastSquares
+from astropy.stats.lombscargle.core import has_units
+
+
+def assert_allclose_blsresults(blsresult, other, **kwargs):
+    """Assert that another BoxLeastSquaresResults object is consistent
+
+    This method loops over all attributes and compares the values using
+    :func:`~astropy.tests.helper.assert_quantity_allclose` function.
+
+    Parameters
+    ----------
+    other : BoxLeastSquaresResults
+        The other results object to compare.
+
+    """
+    for k, v in blsresult.items():
+        if k not in other:
+            raise AssertionError("missing key '{0}'".format(k))
+        if k == "objective":
+            assert v == other[k], (
+                "Mismatched objectives. Expected '{0}', got '{1}'"
+                .format(v, other[k])
+            )
+            continue
+        assert_quantity_allclose(v, other[k], **kwargs)
 
 
 @pytest.fixture
@@ -38,12 +62,12 @@ def test_32bit_bug():
     model = BoxLeastSquares(t, y)
     results = model.autopower(0.16)
     assert np.allclose(results.period[np.argmax(results.power)],
-                       2.005441310651872)
+                       1.9923406038842544)
     periods = np.linspace(1.9, 2.1, 5)
     results = model.power(periods, 0.16)
     assert np.allclose(
         results.power,
-        np.array([0.01479464, 0.03804835, 0.09640946, 0.05199547, 0.01970484])
+        np.array([0.01421067, 0.02842475, 0.10867671, 0.05117755, 0.01783253])
     )
 
 
@@ -72,8 +96,10 @@ def test_fast_method(data, objective, offset):
                                  np.log(params["period"]) + 1, 10))
     durations = params["duration"]
     results = model.power(periods, durations, objective=objective)
-    results.assert_allclose(model.power(periods, durations,
-                                        method="slow", objective=objective))
+
+    assert_allclose_blsresults(results, model.power(periods, durations,
+                                                    method="slow",
+                                                    objective=objective))
 
 
 def test_input_units(data):
@@ -187,7 +213,8 @@ def test_autopower(data):
     period = model.autoperiod(duration)
     results1 = model.power(period, duration)
     results2 = model.autopower(duration)
-    results1.assert_allclose(results2)
+
+    assert_allclose_blsresults(results1, results2)
 
 
 @pytest.mark.parametrize("with_units", [True, False])
@@ -302,3 +329,21 @@ def test_compute_stats(data, with_units, with_err):
     for f, k in zip((1.0, 1.0, 1.0, 0.0),
                     ("depth", "depth_even", "depth_odd", "depth_phased")):
         assert np.abs((stats[k][0]-f*params["depth"]) / stats[k][1]) < 1.0
+
+
+def test_negative_times(data):
+    t, y, dy, params = data
+    mu = np.mean(t)
+    duration = params["duration"] + np.linspace(-0.1, 0.1, 3)
+
+    model1 = BoxLeastSquares(t, y, dy)
+    results1 = model1.autopower(duration)
+
+    # Compute the periodogram with offset (negative) times
+    model2 = BoxLeastSquares(t - mu, y, dy)
+    results2 = model2.autopower(duration)
+
+    # Shift the transit times back into the unshifted coordinates
+    results2.transit_time = (results2.transit_time + mu) % results2.period
+
+    assert_allclose_blsresults(results1, results2)

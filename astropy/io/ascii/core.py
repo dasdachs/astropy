@@ -24,10 +24,10 @@ from io import StringIO
 
 import numpy
 
-from ...utils.exceptions import AstropyWarning
+from astropy.utils.exceptions import AstropyWarning
 
-from ...table import Table
-from ...utils.data import get_readable_fileobj
+from astropy.table import Table
+from astropy.utils.data import get_readable_fileobj
 from . import connect
 
 # Global dictionary mapping format arg to the corresponding Reader class
@@ -401,7 +401,7 @@ class DefaultSplitter(BaseSplitter):
     escapechar = None
     """ one-character stringto quote fields containing special characters """
     quoting = csv.QUOTE_MINIMAL
-    """ control when quotes are recognised by the reader """
+    """ control when quotes are recognized by the reader """
     skipinitialspace = True
     """ ignore whitespace immediately following the delimiter """
     csv_writer = None

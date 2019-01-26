@@ -2,16 +2,16 @@
 
 import os
 import urllib.request
+import warnings
 
 import pytest
 import numpy as np
 
-from ....tests.helper import assert_quantity_allclose, catch_warnings
-from .. import iers
-from .... import units as u
-from ....table import QTable
-from ....time import Time, TimeDelta
-from ....utils.exceptions import AstropyWarning
+from astropy.tests.helper import assert_quantity_allclose, catch_warnings
+from astropy.utils.iers import iers
+from astropy import units as u
+from astropy.table import QTable
+from astropy.time import Time, TimeDelta
 
 FILE_NOT_FOUND_ERROR = getattr(__builtins__, 'FileNotFoundError', OSError)
 
@@ -124,8 +124,7 @@ class TestIERS_AExcerpt():
                                  [-0.4916557, -0.4925323, -0.4934373] * u.s,
                                  atol=0.1*u.ms)
 
-
-        dcip_x,dcip_y, status = iers_tab.dcip_xy(t, return_status=True)
+        dcip_x, dcip_y, status = iers_tab.dcip_xy(t, return_status=True)
         assert status[0] == iers.FROM_IERS_B
         assert np.all(status[1:] == iers.FROM_IERS_A)
         # These values are *exactly* as given in the table, so they should
@@ -201,10 +200,16 @@ class TestIERS_Auto():
         IERS_Auto._check_interpolate_indices() is formatted correctly.
         """
         with iers.conf.set_temp('iers_auto_url', self.iers_a_url_1):
-            with iers.conf.set_temp('auto_max_age', self.ame):
-                with pytest.raises(ValueError) as err:
-                    iers_table = iers.IERS_Auto.open()
-                    delta = iers_table.ut1_utc(self.t.jd1, self.t.jd2)
+            with iers.conf.set_temp('iers_auto_url_mirror', self.iers_a_url_1):
+                with iers.conf.set_temp('auto_max_age', self.ame):
+                    with pytest.raises(ValueError) as err:
+                        iers_table = iers.IERS_Auto.open()
+                        with warnings.catch_warnings():
+                            # Ignoring this if it comes up -- IERS_Auto predictive
+                            # values are older than 30.0 days but downloading the
+                            # latest table did not find newer values
+                            warnings.simplefilter('ignore', iers.IERSStaleWarning)
+                            iers_table.ut1_utc(self.t.jd1, self.t.jd2)
         assert str(err.value) == iers.INTERPOLATE_ERROR.format(self.ame)
 
     def test_auto_max_age_none(self):

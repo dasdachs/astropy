@@ -20,12 +20,12 @@ from .core import (Unit, dimensionless_unscaled, get_current_unit_registry,
                    UnitBase, UnitsError, UnitConversionError, UnitTypeError)
 from .utils import is_effectively_unity
 from .format.latex import Latex
-from ..utils.compat import NUMPY_LT_1_14
-from ..utils.compat.misc import override__dir__
-from ..utils.exceptions import AstropyDeprecationWarning, AstropyWarning
-from ..utils.misc import isiterable, InheritDocstrings
-from ..utils.data_info import ParentDtypeInfo
-from .. import config as _config
+from astropy.utils.compat import NUMPY_LT_1_14, NUMPY_LT_1_16
+from astropy.utils.compat.misc import override__dir__
+from astropy.utils.exceptions import AstropyDeprecationWarning, AstropyWarning
+from astropy.utils.misc import isiterable, InheritDocstrings
+from astropy.utils.data_info import ParentDtypeInfo
+from astropy import config as _config
 from .quantity_helper import (converters_and_unit, can_have_arbitrary_unit,
                               check_output)
 
@@ -195,6 +195,8 @@ class QuantityInfo(QuantityInfoBase):
 
 class Quantity(np.ndarray, metaclass=InheritDocstrings):
     """A `~astropy.units.Quantity` represents a number with some associated unit.
+
+    See also: http://docs.astropy.org/en/stable/units/quantity.html
 
     Parameters
     ----------
@@ -480,7 +482,7 @@ class Quantity(np.ndarray, metaclass=InheritDocstrings):
         ----------
         result : `~numpy.ndarray` or tuple of `~numpy.ndarray`
             Array(s) which need to be turned into quantity.
-        unit : `~astropy.units.Unit` or None
+        unit : `~astropy.units.Unit`
             Unit for the quantities to be returned (or `None` if the result
             should not be a quantity).  Should be tuple if result is a tuple.
         out : `~astropy.units.Quantity` or None
@@ -559,10 +561,13 @@ class Quantity(np.ndarray, metaclass=InheritDocstrings):
         if unit is None:
             unit = self.unit
             quantity_subclass = self.__class__
+        elif unit is self.unit and self.__class__ is Quantity:
+            # The second part is because we should not presume what other
+            # classes want to do for the same unit.  E.g., Constant will
+            # always want to fall back to Quantity, and relies on going
+            # through `__quantity_subclass__`.
+            quantity_subclass = Quantity
         else:
-            # In principle, could gain time by testing unit is self.unit
-            # as well, and then quantity_subclass = self.__class__, but
-            # Constant relies on going through `__quantity_subclass__`.
             unit = Unit(unit)
             quantity_subclass = getattr(unit, '_quantity_class', Quantity)
             if isinstance(self, quantity_subclass):
@@ -988,15 +993,20 @@ class Quantity(np.ndarray, metaclass=InheritDocstrings):
         return super().__pow__(other)
 
     # For Py>=3.5
-    def __matmul__(self, other, reverse=False):
-        result_unit = self.unit * getattr(other, 'unit', dimensionless_unscaled)
-        result_array = np.matmul(self.value, getattr(other, 'value', other))
-        return self._new_view(result_array, result_unit)
+    if NUMPY_LT_1_16:
+        def __matmul__(self, other):
+            result_unit = self.unit * getattr(other, 'unit',
+                                              dimensionless_unscaled)
+            result_array = np.matmul(self.value,
+                                     getattr(other, 'value', other))
+            return self._new_view(result_array, result_unit)
 
-    def __rmatmul__(self, other):
-        result_unit = self.unit * getattr(other, 'unit', dimensionless_unscaled)
-        result_array = np.matmul(getattr(other, 'value', other), self.value)
-        return self._new_view(result_array, result_unit)
+        def __rmatmul__(self, other):
+            result_unit = self.unit * getattr(other, 'unit',
+                                              dimensionless_unscaled)
+            result_array = np.matmul(getattr(other, 'value', other),
+                                     self.value)
+            return self._new_view(result_array, result_unit)
 
     # In numpy 1.13, 1.14, a np.positive ufunc exists, but ndarray.__pos__
     # does not go through it, so we define it, to allow subclasses to override
@@ -1092,6 +1102,7 @@ class Quantity(np.ndarray, metaclass=InheritDocstrings):
             raise TypeError('only integer dimensionless scalar quantities '
                             'can be converted to a Python index')
 
+    # TODO: we may want to add a hook for dimensionless quantities?
     @property
     def _unitstr(self):
         if self.unit is None:
@@ -1104,21 +1115,9 @@ class Quantity(np.ndarray, metaclass=InheritDocstrings):
 
         return unitstr
 
-    # Display
-    # TODO: we may want to add a hook for dimensionless quantities?
-    def __str__(self):
-        return '{0}{1:s}'.format(self.value, self._unitstr)
-
-    def __repr__(self):
-        prefixstr = '<' + self.__class__.__name__ + ' '
-        sep = ',' if NUMPY_LT_1_14 else ', '
-        arrstr = np.array2string(self.view(np.ndarray), separator=sep,
-                                 prefix=prefixstr)
-        return '{0}{1}{2:s}>'.format(prefixstr, arrstr, self._unitstr)
-
-    def _repr_latex_(self):
+    def to_string(self, unit=None, precision=None, format=None, subfmt=None):
         """
-        Generate a latex representation of the quantity and its unit.
+        Generate a string representation of the quantity and its unit.
 
         The behavior of this function can be altered via the
         `numpy.set_printoptions` function and its various keywords.  The
@@ -1127,16 +1126,61 @@ class Quantity(np.ndarray, metaclass=InheritDocstrings):
         This is treated separately because the numpy default of 1000 is too big
         for most browsers to handle.
 
+        Parameters
+        ----------
+        unit : `~astropy.units.UnitBase`, optional
+            Specifies the unit.  If not provided,
+            the unit used to initialize the quantity will be used.
+
+        precision : numeric, optional
+            The level of decimal precision. If `None`, or not provided,
+            it will be determined from NumPy print options.
+
+        format : str, optional
+            The format of the result. If not provided, an unadorned
+            string is returned. Supported values are:
+
+            - 'latex': Return a LaTeX-formatted string
+
+        subfmt : str, optional
+            Subformat of the result. For the moment,
+            only used for format="latex". Supported values are:
+
+            - 'inline': Use ``$ ... $`` as delimiters.
+
+            - 'display': Use ``$\\displaystyle ... $`` as delimiters.
+
         Returns
         -------
         lstr
-            A LaTeX string with the contents of this Quantity
+            A string with the contents of this Quantity
         """
+        if unit is not None and unit != self.unit:
+            return self.to(unit).to_string(
+                unit=None, precision=precision, format=format, subfmt=subfmt)
+
+        formats = {
+            None: None,
+            "latex": {
+                None: ("$", "$"),
+                "inline": ("$", "$"),
+                "display": (r"$\displaystyle ", r"$"),
+            },
+        }
+
+        if format not in formats:
+            raise ValueError("Unknown format '{0}'".format(format))
+        elif format is None:
+            return '{0}{1:s}'.format(self.value, self._unitstr)
+
+        # else, for the moment we assume format="latex"
+
         # need to do try/finally because "threshold" cannot be overridden
         # with array2string
         pops = np.get_printoptions()
 
-        format_spec = '.{}g'.format(pops['precision'])
+        format_spec = '.{}g'.format(
+            precision if precision is not None else pops['precision'])
 
         def float_formatter(value):
             return Latex.format_exponential_notation(value,
@@ -1179,7 +1223,33 @@ class Quantity(np.ndarray, metaclass=InheritDocstrings):
                       if self.unit is not None
                       else _UNIT_NOT_INITIALISED)
 
-        return r'${0} \; {1}$'.format(latex_value, latex_unit)
+        delimiter_left, delimiter_right = formats[format][subfmt]
+
+        return r'{left}{0} \; {1}{right}'.format(latex_value, latex_unit,
+                                                 left=delimiter_left,
+                                                 right=delimiter_right)
+
+    def __str__(self):
+        return self.to_string()
+
+    def __repr__(self):
+        prefixstr = '<' + self.__class__.__name__ + ' '
+        sep = ',' if NUMPY_LT_1_14 else ', '
+        arrstr = np.array2string(self.view(np.ndarray), separator=sep,
+                                 prefix=prefixstr)
+        return '{0}{1}{2:s}>'.format(prefixstr, arrstr, self._unitstr)
+
+    def _repr_latex_(self):
+        """
+        Generate a latex representation of the quantity and its unit.
+
+        Returns
+        -------
+        lstr
+            A LaTeX string with the contents of this Quantity
+        """
+        # NOTE: This should change to display format in a future release
+        return self.to_string(format='latex', subfmt='inline')
 
     def __format__(self, format_spec):
         """
@@ -1442,41 +1512,12 @@ class Quantity(np.ndarray, metaclass=InheritDocstrings):
     def mean(self, axis=None, dtype=None, out=None):
         return self._wrap_function(np.mean, axis, dtype, out=out)
 
-    def ptp(self, axis=None, out=None):
-        return self._wrap_function(np.ptp, axis, out=out)
-
     def round(self, decimals=0, out=None):
         return self._wrap_function(np.round, decimals, out=out)
-
-    def max(self, axis=None, out=None, keepdims=False):
-        return self._wrap_function(np.max, axis, out=out, keepdims=keepdims)
-
-    def min(self, axis=None, out=None, keepdims=False):
-        return self._wrap_function(np.min, axis, out=out, keepdims=keepdims)
-
-    def sum(self, axis=None, dtype=None, out=None, keepdims=False):
-        return self._wrap_function(np.sum, axis, dtype, out=out,
-                                   keepdims=keepdims)
-
-    def prod(self, axis=None, dtype=None, out=None, keepdims=False):
-        if not self.unit.is_unity():
-            raise ValueError("cannot use prod on scaled or "
-                             "non-dimensionless Quantity arrays")
-        return self._wrap_function(np.prod, axis, dtype, out=out,
-                                   keepdims=keepdims)
 
     def dot(self, b, out=None):
         result_unit = self.unit * getattr(b, 'unit', dimensionless_unscaled)
         return self._wrap_function(np.dot, b, out=out, unit=result_unit)
-
-    def cumsum(self, axis=None, dtype=None, out=None):
-        return self._wrap_function(np.cumsum, axis, dtype, out=out)
-
-    def cumprod(self, axis=None, dtype=None, out=None):
-        if not self.unit.is_unity():
-            raise ValueError("cannot use cumprod on scaled or "
-                             "non-dimensionless Quantity arrays")
-        return self._wrap_function(np.cumprod, axis, dtype, out=out)
 
     # Calculation: override methods that do not make sense.
 

@@ -7,23 +7,23 @@ import pytest
 import numpy as np
 from numpy.testing import assert_allclose
 
-from ..column import _parse_tdisp_format, _fortran_to_python_format, \
-    python_to_tdisp
+from astropy.io.fits.column import (_parse_tdisp_format, _fortran_to_python_format,
+                      python_to_tdisp)
 
-from .. import HDUList, PrimaryHDU, BinTableHDU
+from astropy.io.fits import HDUList, PrimaryHDU, BinTableHDU
 
-from ... import fits
+from astropy.io import fits
 
-from .... import units as u
-from ....table import Table, QTable, NdarrayMixin, Column
-from ....table.table_helpers import simple_table
-from ....tests.helper import catch_warnings
-from ....units.format.fits import UnitScaleError
+from astropy import units as u
+from astropy.table import Table, QTable, NdarrayMixin, Column
+from astropy.table.table_helpers import simple_table
+from astropy.tests.helper import catch_warnings
+from astropy.units.format.fits import UnitScaleError
+from astropy.utils.exceptions import AstropyUserWarning
 
-from ....coordinates import SkyCoord, Latitude, Longitude, Angle, EarthLocation
-from ....time import Time, TimeDelta
-from ....units import allclose as quantity_allclose
-from ....units.quantity import QuantityInfo
+from astropy.coordinates import SkyCoord, Latitude, Longitude, Angle, EarthLocation
+from astropy.time import Time, TimeDelta
+from astropy.units.quantity import QuantityInfo
 
 try:
     import yaml  # pylint: disable=W0611
@@ -422,7 +422,9 @@ def test_convert_comment_convention(tmpdir):
     Regression test for https://github.com/astropy/astropy/issues/6079
     """
     filename = os.path.join(DATA, 'stddata.fits')
-    t = Table.read(filename)
+    with pytest.warns(AstropyUserWarning, catch='hdu= was not specified but '
+                      'multiple tables are present'):
+        t = Table.read(filename)
 
     assert t.meta['comments'] == [
         '',
@@ -471,7 +473,7 @@ el2 = EarthLocation(x=[1, 2] * u.km, y=[3, 4] * u.km, z=[5, 6] * u.km)
 sc = SkyCoord([1, 2], [3, 4], unit='deg,deg', frame='fk4',
               obstime='J1990.5')
 scc = sc.copy()
-scc.representation = 'cartesian'
+scc.representation_type = 'cartesian'
 tm = Time([2450814.5, 2450815.5], format='jd', scale='tai', location=el)
 
 
@@ -495,9 +497,9 @@ compare_attrs = {
     'c2': ['data'],
     'tm': time_attrs,
     'dt': ['shape', 'value', 'format', 'scale'],
-    'sc': ['ra', 'dec', 'representation', 'frame.name'],
-    'scc': ['x', 'y', 'z', 'representation', 'frame.name'],
-    'scd': ['ra', 'dec', 'distance', 'representation', 'frame.name'],
+    'sc': ['ra', 'dec', 'representation_type', 'frame.name'],
+    'scc': ['x', 'y', 'z', 'representation_type', 'frame.name'],
+    'scd': ['ra', 'dec', 'distance', 'representation_type', 'frame.name'],
     'q': ['value', 'unit'],
     'lon': ['value', 'unit', 'wrap_angle'],
     'lat': ['value', 'unit'],
@@ -580,8 +582,8 @@ def test_fits_mixins_as_one(table_cls, tmpdir):
     assert t.colnames == t2.colnames
 
     # Read directly via fits and confirm column names
-    hdus = fits.open(filename)
-    assert hdus[1].columns.names == serialized_names
+    with fits.open(filename) as hdus:
+        assert hdus[1].columns.names == serialized_names
 
 
 @pytest.mark.skipif('not HAS_YAML')

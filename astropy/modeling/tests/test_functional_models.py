@@ -5,17 +5,29 @@ import pytest
 import numpy as np
 from numpy.testing import assert_allclose, assert_array_equal
 
-from .. import models, InputParameterError
-from ...coordinates import Angle
-from .. import fitting
-from ...tests.helper import catch_warnings
-from ...utils.exceptions import AstropyDeprecationWarning
+from astropy.modeling import models, InputParameterError
+from astropy.coordinates import Angle
+from astropy.modeling import fitting
+from astropy.tests.helper import catch_warnings
+from astropy.utils.exceptions import AstropyDeprecationWarning
 
 try:
     from scipy import optimize  # pylint: disable=W0611
     HAS_SCIPY = True
 except ImportError:
     HAS_SCIPY = False
+
+
+def test_sigma_constant():
+    """
+    Test that the GAUSSIAN_SIGMA_TO_FWHM constant matches the
+    gaussian_sigma_to_fwhm constant in astropy.stats. We define
+    it manually in astropy.modeling to avoid importing from
+    astropy.stats.
+    """
+    from astropy.stats.funcs import gaussian_sigma_to_fwhm
+    from astropy.modeling.functional_models import GAUSSIAN_SIGMA_TO_FWHM
+    assert gaussian_sigma_to_fwhm == GAUSSIAN_SIGMA_TO_FWHM
 
 
 def test_Trapezoid1D():

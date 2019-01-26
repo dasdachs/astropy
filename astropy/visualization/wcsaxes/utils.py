@@ -3,8 +3,8 @@
 
 import numpy as np
 
-from ... import units as u
-from ...coordinates import BaseCoordinateFrame
+from astropy import units as u
+from astropy.coordinates import BaseCoordinateFrame
 
 __all__ = ['select_step_degree', 'select_step_hour', 'select_step_scalar',
            'coord_type_from_ctype', 'transform_contour_set_inplace']
@@ -164,6 +164,8 @@ def transform_contour_set_inplace(cset, transform):
 
     for collection in cset.collections:
         paths = collection.get_paths()
+        if len(paths) == 0:
+            continue
         all_paths.append(paths)
         # The last item in pos isn't needed for np.split and in fact causes
         # issues if we keep it because it will cause an extra empty array to be
@@ -176,7 +178,11 @@ def transform_contour_set_inplace(cset, transform):
     pos_level = np.cumsum(pos_level)[:-1]
 
     # Stack all the segments into a single (n, 2) array
-    vertices = np.vstack(path.vertices for paths in all_paths for path in paths)
+    vertices = [path.vertices for paths in all_paths for path in paths]
+    if len(vertices) > 0:
+        vertices = np.concatenate(vertices)
+    else:
+        return
 
     # Transform all coordinates in one go
     vertices = transform.transform(vertices)

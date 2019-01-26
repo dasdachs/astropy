@@ -3,10 +3,10 @@
 import functools
 import numpy as np
 
-from ...utils.compat import NUMPY_LT_1_14
-from ...tests.helper import pytest
-from .. import Time
-from ...table import Table
+from astropy.utils.compat import NUMPY_LT_1_14
+from astropy.tests.helper import pytest
+from astropy.time import Time
+from astropy.table import Table
 
 try:
     import h5py  # pylint: disable=W0611
@@ -82,7 +82,11 @@ def test_str():
                     '             mask=[False,  True],',
                     "       fill_value='N/A',",
                     "            dtype='<U23')"]
-    assert repr(t.iso).splitlines() == expected
+
+    # Note that we need to take care to allow for big-endian platforms,
+    # for which the dtype will be >U23 instead of <U23, which we do with
+    # the call to replace().
+    assert repr(t.iso).replace('>U23', '<U23').splitlines() == expected
 
     # Assign value to unmask
     t[1] = '2000:111'
@@ -164,7 +168,8 @@ def test_serialize_fits_masked(tmpdir):
     assert np.all(t2['col0'].value == t['col0'].value)
 
 
-@pytest.mark.skipif('not HAS_H5PY')
+@pytest.mark.skipif(not HAS_YAML or not HAS_H5PY,
+                    reason='Need both h5py and yaml')
 def test_serialize_hdf5_masked(tmpdir):
     tm = Time([1, 2, 3], format='cxcsec')
     tm[1] = np.ma.masked

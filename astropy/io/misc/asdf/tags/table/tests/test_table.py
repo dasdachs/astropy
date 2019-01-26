@@ -4,8 +4,9 @@ import pytest
 import numpy as np
 
 from astropy import table
+from astropy import __minimum_asdf_version__
 
-asdf = pytest.importorskip('asdf', minversion='2.0.0.dev0')
+asdf = pytest.importorskip('asdf', minversion=__minimum_asdf_version__)
 from asdf.tests import helpers
 
 
@@ -115,7 +116,7 @@ table: !core/table
     buff = helpers.yaml_to_asdf(yaml)
 
     with pytest.raises(ValueError):
-        with asdf.AsdfFile.open(buff) as ff:
+        with asdf.open(buff) as ff:
             pass
 
 

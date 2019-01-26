@@ -4,15 +4,15 @@
 import pytest
 import numpy as np
 
-from ....tests.helper import catch_warnings
-from ....table import Table, QTable, NdarrayMixin, Column
-from ....table.table_helpers import simple_table
+from astropy.tests.helper import catch_warnings
+from astropy.table import Table, QTable, NdarrayMixin, Column
+from astropy.table.table_helpers import simple_table
 
-from .... import units as u
+from astropy import units as u
 
-from ....coordinates import SkyCoord, Latitude, Longitude, Angle, EarthLocation
-from ....time import Time, TimeDelta
-from ....units.quantity import QuantityInfo
+from astropy.coordinates import SkyCoord, Latitude, Longitude, Angle, EarthLocation
+from astropy.time import Time, TimeDelta
+from astropy.units.quantity import QuantityInfo
 
 try:
     import h5py
@@ -568,6 +568,35 @@ def test_read_h5py_objects(tmpdir):
     f.close()         # don't raise an error in 'test --open-files'
 
 
+@pytest.mark.skipif('not HAS_H5PY')
+def test_read_write_unicode_to_hdf5(tmpdir):
+    test_file = str(tmpdir.join('test.hdf5'))
+
+    t = Table()
+    t['p'] = ['a', 'b', 'c']
+    t['q'] = [1, 2, 3]
+    t['r'] = [b'a', b'b', b'c']
+    t['s'] = ["\u2119", "\u01b4", "\u2602"]
+    t.write(test_file, path='the_table', overwrite=True)
+
+    t1 = Table.read(test_file, path='the_table', character_as_bytes=False)
+    for col, col1 in zip(t.itercols(), t1.itercols()):
+        assert np.all(col == col1)
+    assert np.all(t1['p'].info.dtype.kind == "U")
+    assert np.all(t1['q'].info.dtype.kind == "i")
+    assert np.all(t1['r'].info.dtype.kind == "U")
+    assert np.all(t1['s'].info.dtype.kind == "U")
+
+    # Test default (character_as_bytes=True)
+    t2 = Table.read(test_file, path='the_table')
+    for col, col1 in zip(t.itercols(), t2.itercols()):
+        assert np.all(col == col1)
+    assert np.all(t2['p'].info.dtype.kind == "S")
+    assert np.all(t2['q'].info.dtype.kind == "i")
+    assert np.all(t2['r'].info.dtype.kind == "S")
+    assert np.all(t2['s'].info.dtype.kind == "S")
+
+
 def assert_objects_equal(obj1, obj2, attrs, compare_class=True):
     if compare_class:
         assert obj1.__class__ is obj2.__class__
@@ -602,7 +631,7 @@ el2 = EarthLocation(x=[1, 2] * u.km, y=[3, 4] * u.km, z=[5, 6] * u.km)
 sc = SkyCoord([1, 2], [3, 4], unit='deg,deg', frame='fk4',
               obstime='J1990.5')
 scc = sc.copy()
-scc.representation = 'cartesian'
+scc.representation_type = 'cartesian'
 tm = Time([2450814.5, 2450815.5], format='jd', scale='tai', location=el)
 
 
@@ -626,9 +655,9 @@ compare_attrs = {
     'c2': ['data'],
     'tm': time_attrs,
     'dt': ['shape', 'value', 'format', 'scale'],
-    'sc': ['ra', 'dec', 'representation', 'frame.name'],
-    'scc': ['x', 'y', 'z', 'representation', 'frame.name'],
-    'scd': ['ra', 'dec', 'distance', 'representation', 'frame.name'],
+    'sc': ['ra', 'dec', 'representation_type', 'frame.name'],
+    'scc': ['x', 'y', 'z', 'representation_type', 'frame.name'],
+    'scd': ['ra', 'dec', 'distance', 'representation_type', 'frame.name'],
     'q': ['value', 'unit'],
     'lon': ['value', 'unit', 'wrap_angle'],
     'lat': ['value', 'unit'],

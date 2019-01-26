@@ -7,10 +7,10 @@ import warnings
 import pytest
 import numpy as np
 
-from ....io import fits
-from ....table import Table
-from .. import printdiff
-from ....tests.helper import catch_warnings
+from astropy.io import fits
+from astropy.table import Table
+from astropy.io.fits import printdiff
+from astropy.tests.helper import catch_warnings
 
 from . import FitsTestCase
 
@@ -42,6 +42,8 @@ class TestConvenience(FitsTestCase):
         f.seek(0)
         header = fits.getheader(f)
         assert not f.closed
+
+        f.close()  # Close it now
 
     def test_table_to_hdu(self):
         table = Table([[1, 2, 3], ['a', 'b', 'c'], [2.3, 4.5, 6.7]],
@@ -154,3 +156,10 @@ class TestConvenience(FitsTestCase):
         # test with datafile
         fits.tabledump(self.temp('tb.fits'), datafile=self.temp('test_tb.txt'))
         assert os.path.isfile(self.temp('test_tb.txt'))
+
+    @pytest.mark.parametrize('mode', ['wb', 'wb+', 'ab', 'ab+'])
+    def test_append_filehandle(self, tmpdir, mode):
+
+        append_file = tmpdir.join('append.fits')
+        with append_file.open(mode) as handle:
+            fits.append(filename=handle, data=np.ones((4, 4)))

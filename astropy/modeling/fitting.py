@@ -32,8 +32,8 @@ from functools import reduce, wraps
 import numpy as np
 
 from .utils import poly_map_domain, _combine_equivalency_dict
-from ..units import Quantity
-from ..utils.exceptions import AstropyUserWarning
+from astropy.units import Quantity
+from astropy.utils.exceptions import AstropyUserWarning
 from .optimizers import (SLSQP, Simplex)
 from .statistic import (leastsquare)
 
@@ -627,7 +627,7 @@ class FittingWithOutlierRemoval:
         """
 
         # For single models, the data get filtered here at each iteration and
-        # then passed to the fitter, which is the historical behaviour and
+        # then passed to the fitter, which is the historical behavior and
         # works even for fitters that don't understand masked arrays. For model
         # sets, the fitter must be able to filter masked data internally,
         # because fitters require a single set of x/y co-ordinates whereas the
@@ -1132,7 +1132,7 @@ class JointFitter(metaclass=_FitterMeta):
         fparams = []
         fparams.extend(self.initvals)
         for model in self.models:
-            params = [p.flatten() for p in model.parameters]
+            params = model.parameters.tolist()
             joint_params = self.jointparams[model]
             param_metrics = model._param_metrics
             for param_name in joint_params:

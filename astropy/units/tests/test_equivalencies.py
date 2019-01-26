@@ -9,9 +9,10 @@ import numpy as np
 from numpy.testing import assert_allclose
 
 # LOCAL
-from ... import units as u
-from ... import constants
-from ...tests.helper import assert_quantity_allclose
+from astropy import units as u
+from astropy.units.equivalencies import Equivalency
+from astropy import constants, cosmology
+from astropy.tests.helper import assert_quantity_allclose
 
 
 def test_dimensionless_angles():
@@ -226,6 +227,12 @@ def test_parallax():
     assert_allclose(a, 3437.7467916)
     b = u.au.to(u.arcminute, a, u.parallax())
     assert_allclose(b, 1)
+
+    val = (-1 * u.mas).to(u.pc, u.parallax())
+    assert np.isnan(val.value)
+
+    val = (-1 * u.mas).to_value(u.pc, u.parallax())
+    assert np.isnan(val)
 
 
 def test_parallax2():
@@ -455,7 +462,7 @@ def test_spectraldensity5():
 
 
 def test_equivalent_units():
-    from .. import imperial
+    from astropy.units import imperial
     with u.add_enabled_units(imperial):
         units = u.g.find_equivalent_units()
         units_set = set(units)
@@ -477,7 +484,7 @@ def test_equivalent_units2():
          u.jupiterRad])
     assert units == match
 
-    from .. import imperial
+    from astropy.units import imperial
     with u.add_enabled_units(imperial):
         units = set(u.Hz.find_equivalent_units(u.spectral()))
         match = set(
@@ -579,17 +586,6 @@ def test_thermodynamic_temperature():
     tb = 0.0026320518775281975 * u.K
     np.testing.assert_almost_equal(
         tb.value, (1 * u.MJy/u.sr).to_value(
-            u.K, equivalencies=u.thermodynamic_temperature(nu)))
-    np.testing.assert_almost_equal(
-        1.0, tb.to_value(
-            u.MJy / u.sr, equivalencies=u.thermodynamic_temperature(nu)))
-
-
-def test_thermodynamic_temperature_w_tcmb():
-    nu = 143 * u.GHz
-    tb = 0.0026320518775281975 * u.K
-    np.testing.assert_almost_equal(
-        tb.value, (1 * u.MJy/u.sr).to_value(
             u.K, equivalencies=u.thermodynamic_temperature(nu, T_cmb=2.7255 * u.K)))
     np.testing.assert_almost_equal(
         1.0, tb.to_value(
@@ -676,7 +672,7 @@ def test_equivalency_context_manager():
 
 
 def test_temperature():
-    from ..imperial import deg_F
+    from astropy.units.imperial import deg_F
     t_k = 0 * u.K
     assert_allclose(t_k.to_value(u.deg_C, u.temperature()), -273.15)
     assert_allclose(t_k.to_value(deg_F, u.temperature()), -459.67)
@@ -752,3 +748,46 @@ def test_plate_scale():
 
     assert_quantity_allclose(asec.to(u.mm, u.plate_scale(platescale)), mm)
     assert_quantity_allclose(asec.to(u.mm, u.plate_scale(platescale2)), mm)
+
+
+def test_littleh():
+    H0_70 = 70*u.km/u.s/u.Mpc
+    h70dist = 70 * u.Mpc/u.littleh
+
+    assert_quantity_allclose(h70dist.to(u.Mpc, u.with_H0(H0_70)), 100*u.Mpc)
+
+    # make sure using the default cosmology works
+    cosmodist = cosmology.default_cosmology.get().H0.value * u.Mpc/u.littleh
+    assert_quantity_allclose(cosmodist.to(u.Mpc, u.with_H0()), 100*u.Mpc)
+
+    # Now try a luminosity scaling
+    h1lum = .49 * u.Lsun * u.littleh**-2
+    assert_quantity_allclose(h1lum.to(u.Lsun, u.with_H0(H0_70)), 1*u.Lsun)
+
+    # And the trickiest one: magnitudes.  Using H0=10 here for the round numbers
+    H0_10 = 10*u.km/u.s/u.Mpc
+    # assume the "true" magnitude M = 12.
+    # Then M - 5*log_10(h)  = M + 5 = 17
+    withlittlehmag = 17 * (u.mag - u.MagUnit(u.littleh**2))
+    assert_quantity_allclose(withlittlehmag.to(u.mag, u.with_H0(H0_10)), 12*u.mag)
+
+
+def test_equivelency():
+    ps = u.pixel_scale(10*u.arcsec/u.pix)
+    assert isinstance(ps, Equivalency)
+    assert isinstance(ps.name, list)
+    assert len(ps.name) == 1
+    assert ps.name[0] == "pixel_scale"
+    assert isinstance(ps.kwargs, list)
+    assert len(ps.kwargs) == 1
+    assert ps.kwargs[0] == dict({'pixscale': 10*u.arcsec/u.pix})
+
+def test_add_equivelencies():
+    e1 = u.pixel_scale(10*u.arcsec/u.pixel) + u.temperature_energy()
+    assert isinstance(e1, Equivalency)
+    assert e1.name == ["pixel_scale", "temperature_energy"]
+    assert isinstance(e1.kwargs, list)
+    assert e1.kwargs == [dict({'pixscale': 10*u.arcsec/u.pix}), dict()]
+
+    e2 = u.pixel_scale(10*u.arcsec/u.pixel) + [1, 2,3]
+    assert isinstance(e2, list)

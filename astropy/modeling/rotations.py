@@ -25,9 +25,9 @@ import numpy as np
 
 from .core import Model
 from .parameters import Parameter
-from ..coordinates.matrix_utilities import rotation_matrix, matrix_product
-from .. import units as u
-from ..utils.decorators import deprecated
+from astropy.coordinates.matrix_utilities import rotation_matrix, matrix_product
+from astropy import units as u
+from astropy.utils.decorators import deprecated
 from .utils import _to_radian, _to_orig_unit
 
 __all__ = ['RotateCelestial2Native', 'RotateNative2Celestial', 'Rotation2D',
@@ -46,7 +46,7 @@ class _EulerRotation:
         for angle, axis in zip([phi, theta, psi], axes_order):
             if isinstance(angle, u.Quantity):
                 angle = angle.value
-            angle = np.asscalar(angle)
+            angle = angle.item()
             matrices.append(rotation_matrix(angle, axis, unit=u.rad))
         result = matrix_product(*matrices[::-1])
         return result

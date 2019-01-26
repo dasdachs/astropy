@@ -14,12 +14,12 @@ import numpy as np
 from numpy.testing import (assert_allclose, assert_array_equal,
                            assert_array_almost_equal)
 
-from ...tests.helper import catch_warnings, raises
-from ...utils import isiterable, minversion
-from ...utils.compat import NUMPY_LT_1_14
-from ...utils.exceptions import AstropyDeprecationWarning, AstropyWarning
-from ... import units as u
-from ...units.quantity import _UNIT_NOT_INITIALISED
+from astropy.tests.helper import catch_warnings, raises
+from astropy.utils import isiterable, minversion
+from astropy.utils.compat import NUMPY_LT_1_14
+from astropy.utils.exceptions import AstropyDeprecationWarning, AstropyWarning
+from astropy import units as u
+from astropy.units.quantity import _UNIT_NOT_INITIALISED
 
 try:
     import matplotlib
@@ -436,11 +436,11 @@ class TestQuantityOperations:
     def test_matrix_multiplication(self):
         a = np.eye(3)
         q = a * u.m
-        result1 = eval("q @ a")
+        result1 = q @ a
         assert np.all(result1 == q)
-        result2 = eval("a @ q")
+        result2 = a @ q
         assert np.all(result2 == q)
-        result3 = eval("q @ q")
+        result3 = q @ q
         assert np.all(result3 == a * u.m ** 2)
         # less trivial case.
         q2 = np.array([[[1., 0., 0.],
@@ -452,7 +452,7 @@ class TestQuantityOperations:
                        [[0., 0., 1.],
                         [1., 0., 0.],
                         [0., 1., 0.]]]) / u.s
-        result4 = eval("q @ q2")
+        result4 = q @ q2
         assert np.all(result4 == np.matmul(a, q2.value) * q.unit * q2.unit)
 
     def test_unary(self):
@@ -540,7 +540,7 @@ class TestQuantityOperations:
 
     def test_complicated_operation(self):
         """ Perform a more complicated test """
-        from .. import imperial
+        from astropy.units import imperial
 
         # Multiple units
         distance = u.Quantity(15., u.meter)
@@ -895,8 +895,26 @@ class TestQuantityDisplay:
         assert str(bad_quantity).endswith(_UNIT_NOT_INITIALISED)
         assert repr(bad_quantity).endswith(_UNIT_NOT_INITIALISED + '>')
 
+    def test_to_string(self):
+        qscalar = u.Quantity(1.5e14, 'm/s')
+
+        # __str__ is the default `format`
+        assert str(qscalar) == qscalar.to_string()
+
+        res = 'Quantity as KMS: 150000000000.0 km / s'
+        assert "Quantity as KMS: {0}".format(qscalar.to_string(unit=u.km / u.s)) == res
+
+        res = r'$1.5 \times 10^{14} \; \mathrm{\frac{m}{s}}$'
+        assert qscalar.to_string(format="latex") == res
+
+        res = r'$1.5 \times 10^{14} \; \mathrm{\frac{m}{s}}$'
+        assert qscalar.to_string(format="latex", subfmt="inline") == res
+
+        res = r'$\displaystyle 1.5 \times 10^{14} \; \mathrm{\frac{m}{s}}$'
+        assert qscalar.to_string(format="latex", subfmt="display") == res
+
     def test_repr_latex(self):
-        from ...units.quantity import conf
+        from astropy.units.quantity import conf
 
         q2scalar = u.Quantity(1.5e14, 'm/s')
         assert self.scalarintq._repr_latex_() == r'$1 \; \mathrm{m}$'
@@ -1366,7 +1384,7 @@ def test_quantity_from_table():
 
 def test_assign_slice_with_quantity_like():
     # Regression tests for gh-5961
-    from ... table import Table, Column
+    from astropy.table import Table, Column
     # first check directly that we can use a Column to assign to a slice.
     c = Column(np.arange(10.), unit=u.mm)
     q = u.Quantity(c)

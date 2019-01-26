@@ -12,7 +12,7 @@ import numpy as np
 
 # NOTE: Do not import anything from astropy.table here.
 # https://github.com/astropy/astropy/issues/6604
-from ...utils.exceptions import AstropyUserWarning, AstropyDeprecationWarning
+from astropy.utils.exceptions import AstropyUserWarning, AstropyDeprecationWarning
 
 HDF5_SIGNATURE = b'\x89HDF\r\n\x1a\n'
 META_KEY = '__table_column_meta__'
@@ -58,7 +58,7 @@ def is_hdf5(origin, filepath, fileobj, *args, **kwargs):
         return isinstance(args[0], (h5py.File, h5py.Group, h5py.Dataset))
 
 
-def read_table_hdf5(input, path=None):
+def read_table_hdf5(input, path=None, character_as_bytes=True):
     """
     Read a Table object from an HDF5 file
 
@@ -75,6 +75,9 @@ def read_table_hdf5(input, path=None):
     path : str
         The path from which to read the table inside the HDF5 file.
         This should be relative to the input file or group.
+    character_as_bytes: boolean
+        If `True` then Table columns are left as bytes.
+        If `False` then Table columns are converted to unicode.
     """
 
     try:
@@ -136,7 +139,7 @@ def read_table_hdf5(input, path=None):
         f = h5py.File(input, 'r')
 
         try:
-            return read_table_hdf5(f, path=path)
+            return read_table_hdf5(f, path=path, character_as_bytes=character_as_bytes)
         finally:
             f.close()
 
@@ -144,7 +147,7 @@ def read_table_hdf5(input, path=None):
     # convert to a Table.
 
     # Create a Table object
-    from ...table import Table, meta, serialize
+    from astropy.table import Table, meta, serialize
 
     table = Table(np.array(input))
 
@@ -179,6 +182,9 @@ def read_table_hdf5(input, path=None):
         # Read the meta-data from the file
         table.meta.update(input.attrs)
 
+    if not character_as_bytes:
+        table.convert_bytestring_to_unicode()
+
     return table
 
 
@@ -186,10 +192,10 @@ def _encode_mixins(tbl):
     """Encode a Table ``tbl`` that may have mixin columns to a Table with only
     astropy Columns + appropriate meta-data to allow subsequent decoding.
     """
-    from ...table import serialize
-    from ...table.table import has_info_class
-    from ... import units as u
-    from ...utils.data_info import MixinInfo, serialize_context_as
+    from astropy.table import serialize
+    from astropy.table.table import has_info_class
+    from astropy import units as u
+    from astropy.utils.data_info import MixinInfo, serialize_context_as
 
     # If PyYAML is not available then check to see if there are any mixin cols
     # that *require* YAML serialization.  HDF5 already has support for
@@ -245,8 +251,8 @@ def write_table_hdf5(table, output, path=None, compression=False,
         If ``append=True`` and ``overwrite=True`` then only the dataset will be
         replaced; the file/group will not be overwritten.
     """
-    from ...table import meta
 
+    from astropy.table import meta
     try:
         import h5py
     except ImportError:
@@ -309,6 +315,13 @@ def write_table_hdf5(table, output, path=None, compression=False,
     # Encode any mixin columns as plain columns + appropriate metadata
     table = _encode_mixins(table)
 
+    # Table with numpy unicode strings can't be written in HDF5 so
+    # to write such a table a copy of table is made containing columns as
+    # bytestrings.  Now this copy of the table can be written in HDF5.
+    if any(col.info.dtype.kind == 'U' for col in table.itercols()):
+        table = table.copy(copy_data=False)
+        table.convert_unicode_to_bytestring()
+
     # Warn if information will be lost when serialize_meta=False.  This is
     # hardcoded to the set difference between column info attributes and what
     # HDF5 can store natively (name, dtype) with no meta.
@@ -368,8 +381,8 @@ def register_hdf5():
     """
     Register HDF5 with Unified I/O.
     """
-    from .. import registry as io_registry
-    from ...table import Table
+    from astropy.io import registry as io_registry
+    from astropy.table import Table
 
     io_registry.register_reader('hdf5', Table, read_table_hdf5)
     io_registry.register_writer('hdf5', Table, write_table_hdf5)

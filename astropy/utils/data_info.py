@@ -36,7 +36,8 @@ __all__ = ['data_info_factory', 'dtype_info_name', 'BaseColumnInfo',
 
 # Tuple of filterwarnings kwargs to ignore when calling info
 IGNORE_WARNINGS = (dict(category=RuntimeWarning, message='All-NaN|'
-                        'Mean of empty slice|Degrees of freedom <= 0'),)
+                        'Mean of empty slice|Degrees of freedom <= 0|'
+                        'invalid value encountered in sqrt'),)
 
 STRING_TYPE_NAMES = {(False, 'S'): 'str',  # not PY3
                      (False, 'U'): 'unicode',
@@ -507,7 +508,7 @@ class BaseColumnInfo(DataInfo):
         """
         col = self._parent
         if self.parent_table is None:
-            from ..table.column import FORMATTER as formatter
+            from astropy.table.column import FORMATTER as formatter
         else:
             formatter = self.parent_table.formatter
 
@@ -567,7 +568,7 @@ class BaseColumnInfo(DataInfo):
         col_len : int
             Length of original object
         '''
-        from ..table.sorted_array import SortedArray
+        from astropy.table.sorted_array import SortedArray
         if not getattr(self, '_copy_indices', True):
             # Necessary because MaskedArray will perform a shallow copy
             col_slice.info.indices = []
@@ -621,7 +622,7 @@ class BaseColumnInfo(DataInfo):
         attrs : dict of merged attributes
 
         """
-        from ..table.np_utils import TableMergeError
+        from astropy.table.np_utils import TableMergeError
 
         def warn_str_func(key, left, right):
             out = ("In merged column '{}' the '{}' attribute does not match "
@@ -657,7 +658,7 @@ class MixinInfo(BaseColumnInfo):
         # table when setting the name attribute.  This mirrors the same
         # functionality in the BaseColumn class.
         if attr == 'name' and self.parent_table is not None:
-            from ..table.np_utils import fix_column_name
+            from astropy.table.np_utils import fix_column_name
             new_name = fix_column_name(value)  # Ensure col name is numpy compatible
             self.parent_table.columns._rename_column(self.name, new_name)
 

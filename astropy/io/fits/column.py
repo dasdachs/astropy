@@ -20,8 +20,8 @@ from .util import (pairwise, _is_int, _convert_array, encode_ascii, cmp,
                    NotifierMixin)
 from .verify import VerifyError, VerifyWarning
 
-from ...utils import lazyproperty, isiterable, indent
-from ...utils.exceptions import AstropyUserWarning
+from astropy.utils import lazyproperty, isiterable, indent
+from astropy.utils.exceptions import AstropyUserWarning
 
 __all__ = ['Column', 'ColDefs', 'Delayed']
 
@@ -1423,11 +1423,11 @@ class ColDefs(NotifierMixin):
 
             # Check for unsigned ints.
             bzero = None
-            if 'I' in format and ftype == np.dtype('uint16'):
+            if 'I' in format and ftype.base == np.dtype('uint16'):
                 bzero = np.uint16(2**15)
-            elif 'J' in format and ftype == np.dtype('uint32'):
+            elif 'J' in format and ftype.base == np.dtype('uint32'):
                 bzero = np.uint32(2**31)
-            elif 'K' in format and ftype == np.dtype('uint64'):
+            elif 'K' in format and ftype.base == np.dtype('uint64'):
                 bzero = np.uint64(2**63)
 
             c = Column(name=cname, format=format,

@@ -34,9 +34,9 @@ from . import fastbasic
 from . import cparser
 from . import fixedwidth
 
-from ...table import Table, vstack, MaskedColumn
-from ...utils.data import get_readable_fileobj
-from ...utils.exceptions import AstropyWarning, AstropyDeprecationWarning
+from astropy.table import Table, vstack, MaskedColumn
+from astropy.utils.data import get_readable_fileobj
+from astropy.utils.exceptions import AstropyWarning, AstropyDeprecationWarning
 
 _read_trace = []
 
@@ -206,6 +206,11 @@ def read(table, guess=None, **kwargs):
     Read the input ``table`` and return the table.  Most of
     the default behavior for various parameters is determined by the Reader
     class.
+
+    See also:
+
+    - http://docs.astropy.org/en/stable/io/ascii/
+    - http://docs.astropy.org/en/stable/io/ascii/read.html
 
     Parameters
     ----------
@@ -819,6 +824,11 @@ def write(table, output=None, format=None, Writer=None, fast_writer=True, *,
           overwrite=None, **kwargs):
     """Write the input ``table`` to ``filename``.  Most of the default behavior
     for various parameters is determined by the Writer class.
+
+    See also:
+
+    - http://docs.astropy.org/en/stable/io/ascii/
+    - http://docs.astropy.org/en/stable/io/ascii/write.html
 
     Parameters
     ----------

@@ -5,10 +5,10 @@ from io import StringIO
 import pytest
 import numpy as np
 
-from .. import core, funcs
-from ...units import allclose
-from ...utils.compat import NUMPY_LT_1_14
-from ... import units as u
+from astropy.cosmology import core, funcs
+from astropy.units import allclose
+from astropy.utils.compat import NUMPY_LT_1_14
+from astropy import units as u
 
 try:
     import scipy  # pylint: disable=W0611
@@ -1568,12 +1568,15 @@ def test_z_at_value():
     assert allclose(z_at_value(cosmo.distmod, 46 * u.mag),
                     1.9913891680278133, rtol=1e-6)
 
-    # test behaviour when the solution is outside z limits (should
+    # test behavior when the solution is outside z limits (should
     # raise a CosmologyError)
     with pytest.raises(core.CosmologyError):
-        z_at_value(cosmo.angular_diameter_distance, 1500*u.Mpc, zmax=0.5)
+        with pytest.warns(UserWarning, match='fval is not bracketed'):
+            z_at_value(cosmo.angular_diameter_distance, 1500*u.Mpc, zmax=0.5)
+
     with pytest.raises(core.CosmologyError):
-        z_at_value(cosmo.angular_diameter_distance, 1500*u.Mpc, zmin=4.)
+        with pytest.warns(UserWarning, match='fval is not bracketed'):
+            z_at_value(cosmo.angular_diameter_distance, 1500*u.Mpc, zmin=4.)
 
 
 @pytest.mark.skipif('not HAS_SCIPY')

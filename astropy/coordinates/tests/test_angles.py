@@ -6,9 +6,10 @@ import pytest
 import numpy as np
 from numpy.testing import assert_allclose, assert_array_equal
 
-from ..angles import Longitude, Latitude, Angle
-from ... import units as u
-from ..errors import IllegalSecondError, IllegalMinuteError, IllegalHourError
+from astropy.coordinates.angles import Longitude, Latitude, Angle
+from astropy import units as u
+from astropy.coordinates.errors import (IllegalSecondError, IllegalMinuteError, IllegalHourError,
+                      IllegalSecondWarning, IllegalMinuteWarning)
 
 
 def test_create_angles():
@@ -182,6 +183,30 @@ def test_angle_ops():
 
     with pytest.raises(TypeError):
         np.sin(a6, out=a6)
+
+
+def test_angle_methods():
+    # Most methods tested as part of the Quantity tests.
+    # A few tests here which caused problems before: #8368
+    a = Angle([0., 2.], 'deg')
+    a_mean = a.mean()
+    assert type(a_mean) is Angle
+    assert a_mean == 1. * u.degree
+    a_std = a.std()
+    assert type(a_std) is Angle
+    assert a_std == 1. * u.degree
+    a_var = a.var()
+    assert type(a_var) is u.Quantity
+    assert a_var == 1. * u.degree ** 2
+    a_ptp = a.ptp()
+    assert type(a_ptp) is Angle
+    assert a_ptp == 2. * u.degree
+    a_max = a.max()
+    assert type(a_max) is Angle
+    assert a_max == 2. * u.degree
+    a_min = a.min()
+    assert type(a_min) is Angle
+    assert a_min == 0. * u.degree
 
 
 def test_angle_convert():
@@ -458,48 +483,56 @@ def test_negative_zero_hm():
 
 def test_negative_sixty_hm():
     # Test for HM parser
-    a = Angle('-00:60', u.hour)
+    with pytest.warns(IllegalMinuteWarning):
+        a = Angle('-00:60', u.hour)
     assert_allclose(a.hour, -1.)
 
 
 def test_plus_sixty_hm():
     # Test for HM parser
-    a = Angle('00:60', u.hour)
+    with pytest.warns(IllegalMinuteWarning):
+        a = Angle('00:60', u.hour)
     assert_allclose(a.hour, 1.)
 
 
 def test_negative_fifty_nine_sixty_dms():
     # Test for DMS parser
-    a = Angle('-00:59:60', u.deg)
+    with pytest.warns(IllegalSecondWarning):
+        a = Angle('-00:59:60', u.deg)
     assert_allclose(a.degree, -1.)
 
 
 def test_plus_fifty_nine_sixty_dms():
     # Test for DMS parser
-    a = Angle('+00:59:60', u.deg)
+    with pytest.warns(IllegalSecondWarning):
+        a = Angle('+00:59:60', u.deg)
     assert_allclose(a.degree, 1.)
 
 
 def test_negative_sixty_dms():
     # Test for DMS parser
-    a = Angle('-00:00:60', u.deg)
+    with pytest.warns(IllegalSecondWarning):
+        a = Angle('-00:00:60', u.deg)
     assert_allclose(a.degree, -1. / 60.)
 
 
 def test_plus_sixty_dms():
     # Test for DMS parser
-    a = Angle('+00:00:60', u.deg)
+    with pytest.warns(IllegalSecondWarning):
+        a = Angle('+00:00:60', u.deg)
     assert_allclose(a.degree, 1. / 60.)
 
 
 def test_angle_to_is_angle():
-    a = Angle('00:00:60', u.deg)
+    with pytest.warns(IllegalSecondWarning):
+        a = Angle('00:00:60', u.deg)
     assert isinstance(a, Angle)
     assert isinstance(a.to(u.rad), Angle)
 
 
 def test_angle_to_quantity():
-    a = Angle('00:00:60', u.deg)
+    with pytest.warns(IllegalSecondWarning):
+        a = Angle('00:00:60', u.deg)
     q = u.Quantity(a)
     assert isinstance(q, u.Quantity)
     assert q.unit is u.deg
@@ -518,7 +551,8 @@ def test_quantity_to_angle():
 
 
 def test_angle_string():
-    a = Angle('00:00:60', u.deg)
+    with pytest.warns(IllegalSecondWarning):
+        a = Angle('00:00:60', u.deg)
     assert str(a) == '0d01m00s'
     a = Angle('-00:00:10', u.hour)
     assert str(a) == '-0h00m10s'
@@ -843,6 +877,7 @@ def test_wrap_at_without_new():
     l = np.concatenate([l1, l2])
     assert l._wrap_angle is not None
 
+
 def test__str__():
     """
     Check the __str__ method used in printing the Angle
@@ -862,6 +897,7 @@ def test__str__():
     # summarizing for large arrays, ... should appear
     bigarrangle = Angle(np.ones(10000), u.deg)
     assert '...' in bigarrangle.__str__()
+
 
 def test_repr_latex():
     """
@@ -890,9 +926,9 @@ def test_angle_with_cds_units_enabled():
     Especially the example in
     https://github.com/astropy/astropy/issues/5350#issuecomment-248770151
     """
-    from ...units import cds
+    from astropy.units import cds
     # the problem is with the parser, so remove it temporarily
-    from ..angle_utilities import _AngleParser
+    from astropy.coordinates.angle_utilities import _AngleParser
     del _AngleParser._parser
     with cds.enable():
         Angle('5d')

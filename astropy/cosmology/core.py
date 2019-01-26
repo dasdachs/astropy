@@ -10,10 +10,10 @@ import numpy as np
 
 from . import scalar_inv_efuncs
 
-from .. import constants as const
-from .. import units as u
-from ..utils import isiterable
-from ..utils.state import ScienceState
+from astropy import constants as const
+from astropy import units as u
+from astropy.utils import isiterable
+from astropy.utils.state import ScienceState
 
 from . import parameters
 
@@ -3337,7 +3337,7 @@ class default_cosmology(ScienceState):
         >>> with default_cosmology.set('WMAP7'):
         ...     # WMAP7 cosmology in effect
     """
-    _value = 'WMAP9'
+    _value = 'Planck15'
 
     @staticmethod
     def get_cosmology_from_string(arg):

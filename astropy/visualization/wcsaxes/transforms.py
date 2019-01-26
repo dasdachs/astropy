@@ -13,10 +13,10 @@ import numpy as np
 from matplotlib.path import Path
 from matplotlib.transforms import Transform
 
-from ... import units as u
-from ...wcs import WCS
-from ...wcs.utils import wcs_to_celestial_frame
-from ...coordinates import (SkyCoord, frame_transform_graph,
+from astropy import units as u
+from astropy.wcs import WCS
+from astropy.wcs.utils import wcs_to_celestial_frame
+from astropy.coordinates import (SkyCoord, frame_transform_graph,
                             SphericalRepresentation,
                             UnitSphericalRepresentation,
                             BaseCoordinateFrame)
@@ -249,12 +249,8 @@ class CoordinateTransform(CurvedTransform):
         with np.errstate(all='ignore'):
             c_out = c_in.transform_to(self.output_system)
 
-        if issubclass(c_out.representation, (SphericalRepresentation, UnitSphericalRepresentation)):
-            lon = c_out.data.lon.deg
-            lat = c_out.data.lat.deg
-        else:
-            lon = c_out.spherical.lon.deg
-            lat = c_out.spherical.lat.deg
+        lon = c_out.spherical.lon.deg
+        lat = c_out.spherical.lat.deg
 
         return np.concatenate((lon[:, np.newaxis], lat[:, np.newaxis]), axis=1)
 

@@ -8,9 +8,9 @@ import pytest
 
 from datetime import timedelta
 
-from .. import (Time, TimeDelta, OperandTypeError, ScaleValueError,
+from astropy.time import (Time, TimeDelta, OperandTypeError, ScaleValueError,
                 TIME_SCALES, STANDARD_TIME_SCALES, TIME_DELTA_SCALES)
-from ... import units as u
+from astropy import units as u
 
 allclose_jd = functools.partial(np.allclose, rtol=2. ** -52, atol=0)
 allclose_jd2 = functools.partial(np.allclose, rtol=2. ** -52,
@@ -256,7 +256,7 @@ class TestTimeDelta():
 
 class TestTimeDeltaScales():
     """Test scale conversion for Time Delta.
-    Go through @taldcroft's list of expected behaviour from #1932"""
+    Go through @taldcroft's list of expected behavior from #1932"""
 
     def setup(self):
         # pick a date that includes a leap second for better testing
@@ -504,6 +504,26 @@ def test_timedelta_setitem():
     assert 'cannot convert value to a compatible TimeDelta' in str(err)
 
 
+def test_timedelta_setitem_sec():
+    t = TimeDelta([1, 2, 3], format='sec')
+
+    t[0] = 0.5
+    assert allclose_jd(t.value, [0.5, 2, 3])
+
+    t[1:] = 4.5
+    assert allclose_jd(t.value, [0.5, 4.5, 4.5])
+
+    t[:] = 1 * u.day
+    assert allclose_jd(t.value, [86400, 86400, 86400])
+
+    t[1] = TimeDelta(2, format='jd')
+    assert allclose_jd(t.value, [86400, 86400 * 2, 86400])
+
+    with pytest.raises(ValueError) as err:
+        t[1] = 1 * u.m
+    assert 'cannot convert value to a compatible TimeDelta' in str(err)
+
+
 def test_timedelta_mask():
     t = TimeDelta([1, 2] * u.d, format='jd')
     t[1] = np.ma.masked
@@ -544,3 +564,11 @@ def test_timedelta_to_datetime():
           [timedelta(days=3), timedelta(days=4)]]
 
     assert np.all(td2.to_datetime() == td)
+
+
+def test_insert_timedelta():
+    tm = TimeDelta([1, 2], format='sec')
+
+    # Insert a scalar using an auto-parsed string
+    tm2 = tm.insert(1, TimeDelta([10, 20], format='sec'))
+    assert np.all(tm2 == TimeDelta([1, 10, 20, 2], format='sec'))

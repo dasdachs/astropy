@@ -10,12 +10,12 @@ from itertools import chain
 import pytest
 import numpy as np
 
-from ... import ascii
-from .... import table
-from ....table.table_helpers import simple_table
-from ....tests.helper import catch_warnings
-from ....utils.exceptions import AstropyWarning, AstropyDeprecationWarning
-from .... import units
+from astropy.io import ascii
+from astropy import table
+from astropy.table.table_helpers import simple_table
+from astropy.tests.helper import catch_warnings
+from astropy.utils.exceptions import AstropyWarning, AstropyDeprecationWarning
+from astropy import units
 
 from .common import setup_function, teardown_function
 
@@ -665,6 +665,15 @@ def test_write_quoted_empty_field(fast_writer):
     out = StringIO()
     ascii.write(t, out, fast_writer=fast_writer, delimiter=',')
     assert out.getvalue().splitlines() == ['col0,col1', 'Hello,', ',']
+
+
+@pytest.mark.parametrize("fast_writer", [True, False])
+def test_write_empty_table(fast_writer):
+    """Test writing empty table #8275."""
+    t = table.Table([[]], dtype=['S2'])
+    out = StringIO()
+    ascii.write(t, out, fast_writer=fast_writer)
+    assert out.getvalue().splitlines() == ['col0']
 
 
 @pytest.mark.parametrize("format", ['ascii', 'csv', 'html', 'latex',

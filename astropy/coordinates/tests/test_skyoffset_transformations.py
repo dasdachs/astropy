@@ -4,12 +4,12 @@
 import pytest
 import numpy as np
 
-from ... import units as u
-from ..distances import Distance
-from ..builtin_frames import ICRS, FK5, Galactic, AltAz, SkyOffsetFrame
-from .. import SkyCoord, EarthLocation
-from ...time import Time
-from ...tests.helper import assert_quantity_allclose as assert_allclose
+from astropy import units as u
+from astropy.coordinates.distances import Distance
+from astropy.coordinates.builtin_frames import ICRS, FK5, Galactic, AltAz, SkyOffsetFrame
+from astropy.coordinates import SkyCoord, EarthLocation
+from astropy.time import Time
+from astropy.tests.helper import assert_quantity_allclose as assert_allclose
 
 
 @pytest.mark.parametrize("inradec,expectedlatlon, tolsep", [
@@ -90,7 +90,7 @@ def test_skyoffset_functional_dec():
                       np.sin(dec_rad) * np.cos(input_ra_rad) * np.cos(input_dec_rad))
         expected = SkyCoord(x=expected_x,
                             y=expected_y,
-                            z=expected_z, unit='kpc', representation='cartesian')
+                            z=expected_z, unit='kpc', representation_type='cartesian')
         expected_xyz = expected.cartesian.xyz
 
         # actual transformation to the frame
@@ -136,7 +136,7 @@ def test_skyoffset_functional_ra_dec():
                           np.sin(dec_rad) * np.sin(ra_rad) * np.sin(input_ra_rad) * np.cos(input_dec_rad))
             expected = SkyCoord(x=expected_x,
                                 y=expected_y,
-                                z=expected_z, unit='kpc', representation='cartesian')
+                                z=expected_z, unit='kpc', representation_type='cartesian')
             expected_xyz = expected.cartesian.xyz
 
             # actual transformation to the frame
@@ -207,6 +207,7 @@ def test_m31_coord_transforms(fromsys, tosys, fromcoo, tocoo):
                     [1.0*u.deg, 1.0*u.deg], atol=convert_precision)
 
 
+@pytest.mark.remote_data
 def test_altaz_attribute_transforms():
     """Test transforms between AltAz frames with different attributes."""
     el1 = EarthLocation(0*u.deg, 0*u.deg, 0*u.m)

@@ -4,13 +4,13 @@ import pytest
 import numpy as np
 
 from .test_table import SetupData
-from ..bst import BST, FastRBT, FastBST
-from ..sorted_array import SortedArray
-from ..soco import SCEngine, HAS_SOCO
-from ..table import QTable, Row, Table
-from ... import units as u
-from ...time import Time
-from ..column import BaseColumn
+from astropy.table.bst import BST, FastRBT, FastBST
+from astropy.table.sorted_array import SortedArray
+from astropy.table.soco import SCEngine, HAS_SOCO
+from astropy.table.table import QTable, Row, Table
+from astropy import units as u
+from astropy.time import Time
+from astropy.table.column import BaseColumn
 
 try:
     import bintrees
@@ -500,7 +500,7 @@ class TestIndex(SetupData):
         for i, p in zip(t2, [1, 4, 2]):  # same order as input list
             assert list(t[p-1]) == i
 
-    def test_invalid_updation(self, main_col, table_types, engine):
+    def test_invalid_updates(self, main_col, table_types, engine):
         # using .loc and .loc_indices with a value not present should raise an exception
         self._setup(main_col, table_types)
         t = Table([[1, 2, 3, 4], [2, 3, 4, 5], [3, 4, 5, 6]], names=('a', 'b', 'c'), meta={'name': 'first table'})

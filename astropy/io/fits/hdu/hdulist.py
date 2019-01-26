@@ -15,14 +15,14 @@ from . import compressed
 from .base import _BaseHDU, _ValidHDU, _NonstandardHDU, ExtensionHDU
 from .groups import GroupsHDU
 from .image import PrimaryHDU, ImageHDU
-from ..file import _File
-from ..header import _pad_length
-from ..util import (_is_int, _tmp_name, fileobj_closed, ignore_sigint,
-                    _get_array_mmap, _free_space_check)
-from ..verify import _Verify, _ErrList, VerifyError, VerifyWarning
-from ....utils import indent
-from ....utils.exceptions import AstropyUserWarning
-from ....utils.decorators import deprecated_renamed_argument
+from astropy.io.fits.file import _File, FILE_MODES
+from astropy.io.fits.header import _pad_length
+from astropy.io.fits.util import (_is_int, _tmp_name, fileobj_closed, ignore_sigint,
+                    _get_array_mmap, _free_space_check, fileobj_mode, isfile)
+from astropy.io.fits.verify import _Verify, _ErrList, VerifyError, VerifyWarning
+from astropy.utils import indent
+from astropy.utils.exceptions import AstropyUserWarning
+from astropy.utils.decorators import deprecated_renamed_argument
 
 
 def fitsopen(name, mode='readonly', memmap=None, save_backup=False,
@@ -127,7 +127,7 @@ def fitsopen(name, mode='readonly', memmap=None, save_backup=False,
 
     """
 
-    from .. import conf
+    from astropy.io.fits import conf
 
     if memmap is None:
         # distinguish between True (kwarg explicitly set)
@@ -549,7 +549,7 @@ class HDUList(list, _Verify):
         # Make sure that HDUs are loaded before attempting to pop
         self.readall()
         list_index = self.index_of(index)
-        return super(HDUList, self).pop(list_index)
+        return super().pop(list_index)
 
     def insert(self, index, hdu):
         """
@@ -912,11 +912,11 @@ class HDUList(list, _Verify):
         # of the caller)
         closed = isinstance(fileobj, str) or fileobj_closed(fileobj)
 
-        # writeto is only for writing a new file from scratch, so the most
-        # sensible mode to require is 'ostream'.  This can accept an open
-        # file object that's open to write only, or in append/update modes
-        # but only if the file doesn't exist.
-        fileobj = _File(fileobj, mode='ostream', overwrite=overwrite)
+        mode = FILE_MODES[fileobj_mode(fileobj)] if isfile(fileobj) else 'ostream'
+
+        # This can accept an open file object that's open to write only, or in
+        # append/update modes but only if the file doesn't exist.
+        fileobj = _File(fileobj, mode=mode, overwrite=overwrite)
         hdulist = self.fromfile(fileobj)
         try:
             dirname = os.path.dirname(hdulist._file.name)

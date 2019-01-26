@@ -31,19 +31,19 @@ from functools import partial
 
 import numpy as np
 
-from ..utils import indent, metadata
-from ..table import Table
-from ..units import Quantity, UnitsError, dimensionless_unscaled
-from ..units.utils import quantity_asanyarray
-from ..utils import (sharedmethod, find_current_module,
+from astropy.utils import indent, metadata
+from astropy.table import Table
+from astropy.units import Quantity, UnitsError, dimensionless_unscaled
+from astropy.units.utils import quantity_asanyarray
+from astropy.utils import (sharedmethod, find_current_module,
                      InheritDocstrings, OrderedDescriptorContainer,
                      check_broadcast, IncompatibleShapeError, isiterable)
-from ..utils.codegen import make_function_with_signature
-from ..utils.exceptions import AstropyDeprecationWarning
+from astropy.utils.codegen import make_function_with_signature
+from astropy.utils.exceptions import AstropyDeprecationWarning
 from .utils import (combine_labels, make_binary_operator_eval,
                     ExpressionTree, AliasDict, get_inputs_and_params,
                     _BoundingBox, _combine_equivalency_dict)
-from ..nddata.utils import add_array, extract_array
+from astropy.nddata.utils import add_array, extract_array
 
 from .parameters import Parameter, InputParameterError, param_repr_oneline
 
@@ -1412,7 +1412,7 @@ class Model(metaclass=_ModelMeta):
 
         Model sub-classes can also use function annotations in evaluate to
         indicate valid input units, in which case this property should
-        not be overriden since it will return the input units based on the
+        not be overridden since it will return the input units based on the
         annotations.
         """
         if hasattr(self, '_input_units'):
@@ -1436,7 +1436,7 @@ class Model(metaclass=_ModelMeta):
 
         Model sub-classes can also use function annotations in evaluate to
         indicate valid output units, in which case this property should not be
-        overriden since it will return the return units based on the
+        overridden since it will return the return units based on the
         annotations.
         """
         if hasattr(self, '_return_units'):
@@ -3288,7 +3288,7 @@ def _prepare_outputs_single_model(model, outputs, format_info):
         if broadcast_shape is not None:
             if not broadcast_shape:
                 # Shape is (), i.e. a scalar should be returned
-                outputs[idx] = np.asscalar(output)
+                outputs[idx] = output.item()
             else:
                 outputs[idx] = output.reshape(broadcast_shape)
 

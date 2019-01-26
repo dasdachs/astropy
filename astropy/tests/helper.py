@@ -19,8 +19,8 @@ try:
 except ImportError:
     pass
 
-from ..units import allclose as quantity_allclose  # noqa
-from ..utils.exceptions import (AstropyDeprecationWarning,
+from astropy.units import allclose as quantity_allclose  # noqa
+from astropy.utils.exceptions import (AstropyDeprecationWarning,
                                 AstropyPendingDeprecationWarning)
 
 
@@ -53,7 +53,7 @@ def _save_coverage(cov, result, rootdir, testing_path):
     This method is called after the tests have been run in coverage mode
     to cleanup and then save the coverage data and report.
     """
-    from ..utils.console import color_print
+    from astropy.utils.console import color_print
 
     if result != 0:
         return
@@ -232,7 +232,7 @@ def treat_deprecations_as_exceptions():
     # on. See https://github.com/astropy/astropy/pull/5513.
     for module in list(sys.modules.values()):
         # We don't want to deal with six.MovedModules, only "real"
-        # modules.
+        # modules. FIXME: we no more use six, this should be useless ?
         if (isinstance(module, types.ModuleType) and
                 hasattr(module, '__warningregistry__')):
             del module.__warningregistry__
@@ -300,11 +300,11 @@ class catch_warnings(warnings.catch_warnings):
     """
 
     def __init__(self, *classes):
-        super(catch_warnings, self).__init__(record=True)
+        super().__init__(record=True)
         self.classes = classes
 
     def __enter__(self):
-        warning_list = super(catch_warnings, self).__enter__()
+        warning_list = super().__enter__()
         treat_deprecations_as_exceptions()
         if len(self.classes) == 0:
             warnings.simplefilter('always')
@@ -328,7 +328,7 @@ class ignore_warnings(catch_warnings):
     """
 
     def __init__(self, category=None):
-        super(ignore_warnings, self).__init__()
+        super().__init__()
 
         if isinstance(category, type) and issubclass(category, Warning):
             self.category = [category]
@@ -347,7 +347,7 @@ class ignore_warnings(catch_warnings):
         return wrapper
 
     def __enter__(self):
-        retval = super(ignore_warnings, self).__enter__()
+        retval = super().__enter__()
         if self.category is not None:
             for category in self.category:
                 warnings.simplefilter('ignore', category)
@@ -373,7 +373,7 @@ def assert_follows_unicode_guidelines(
         ensure that ``__bytes__(x)`` roundtrip.
         If not provided, no roundtrip testing will be performed.
     """
-    from .. import conf
+    from astropy import conf
 
     with conf.set_temp('unicode_output', False):
         bytes_x = bytes(x)
@@ -473,6 +473,6 @@ def assert_quantity_allclose(actual, desired, rtol=1.e-7, atol=None,
     :func:`numpy.testing.assert_allclose`.
     """
     import numpy as np
-    from ..units.quantity import _unquantify_allclose_arguments
+    from astropy.units.quantity import _unquantify_allclose_arguments
     np.testing.assert_allclose(*_unquantify_allclose_arguments(
         actual, desired, rtol, atol), **kwargs)

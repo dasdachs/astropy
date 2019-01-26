@@ -12,9 +12,9 @@ import importlib
 from collections import OrderedDict
 from importlib.util import find_spec
 
-from ..config.paths import set_temp_config, set_temp_cache
-from ..utils import wraps, find_current_module
-from ..utils.exceptions import AstropyWarning, AstropyDeprecationWarning
+from astropy.config.paths import set_temp_config, set_temp_cache
+from astropy.utils import wraps, find_current_module
+from astropy.utils.exceptions import AstropyWarning, AstropyDeprecationWarning
 
 __all__ = ['TestRunner', 'TestRunnerBase', 'keyword']
 
@@ -131,7 +131,7 @@ class TestRunnerBase:
 
         cls.run_tests.__doc__ = cls.RUN_TESTS_DOCSTRING.format(keywords=doc_keywords)
 
-        return super(TestRunnerBase, cls).__new__(cls)
+        return super().__new__(cls)
 
     def _generate_args(self, **kwargs):
         # Update default values with passed kwargs
@@ -272,6 +272,7 @@ class TestRunnerBase:
         if hasattr(test, '__wrapped__'):
             del test.__wrapped__
 
+        test.__test__ = False
         return test
 
 
@@ -564,7 +565,7 @@ class TestRunner(TestRunnerBase):
                                    "docs path ({path}) does not exist.")
                 paths = self.packages_path(kwargs['package'], docs_path,
                                            warning=warning_message)
-            else:
+            elif not kwargs['test_path']:
                 paths = [docs_path, ]
 
             if len(paths) and not kwargs['test_path']:
@@ -599,6 +600,6 @@ class TestRunner(TestRunnerBase):
         # This prevents cyclical import problems that make it
         # impossible to test packages that define Table types on their
         # own.
-        from ..table import Table  # pylint: disable=W0611
+        from astropy.table import Table  # pylint: disable=W0611
 
-        return super(TestRunner, self).run_tests(**kwargs)
+        return super().run_tests(**kwargs)

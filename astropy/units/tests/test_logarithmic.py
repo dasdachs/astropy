@@ -11,8 +11,8 @@ import pytest
 import numpy as np
 from numpy.testing import assert_allclose
 
-from ...tests.helper import assert_quantity_allclose
-from ... import units as u, constants as c
+from astropy.tests.helper import assert_quantity_allclose
+from astropy import units as u, constants as c
 
 lu_units = [u.dex, u.mag, u.decibel]
 
@@ -81,20 +81,25 @@ def test_predefined_magnitudes():
                              1.*u.erg/u.cm**2/u.s/u.AA)
     assert_quantity_allclose((-48.6*u.ABmag).physical,
                              1.*u.erg/u.cm**2/u.s/u.Hz)
+
     assert_quantity_allclose((0*u.M_bol).physical, c.L_bol0)
     assert_quantity_allclose((0*u.m_bol).physical,
                              c.L_bol0/(4.*np.pi*(10.*c.pc)**2))
 
 
 def test_predefined_reinitialisation():
-    assert u.mag('ST') == u.STmag
-    assert u.mag('AB') == u.ABmag
+    assert u.mag('STflux') == u.STmag
+    assert u.mag('ABflux') == u.ABmag
     assert u.mag('Bol') == u.M_bol
     assert u.mag('bol') == u.m_bol
 
+    # required for backwards-compatibility, at least unless deprecated
+    assert u.mag('ST') == u.STmag
+    assert u.mag('AB') == u.ABmag
+
 
 def test_predefined_string_roundtrip():
-    """Ensure roundtripping; see #5015"""
+    """Ensure round-tripping; see #5015"""
     with u.magnitude_zero_points.enable():
         assert u.Unit(u.STmag.to_string()) == u.STmag
         assert u.Unit(u.ABmag.to_string()) == u.ABmag
@@ -827,30 +832,7 @@ class TestLogQuantityMethods:
 
     @pytest.mark.parametrize('method', ('prod', 'cumprod'))
     def test_never_ok(self, method):
-        with pytest.raises(ValueError):
+        with pytest.raises(TypeError):
             getattr(self.mJy, method)()
-
-        with pytest.raises(ValueError):
+        with pytest.raises(TypeError):
             getattr(self.m1, method)()
-
-
-class TestLogQuantityUfuncs:
-    """Spot checks on ufuncs."""
-
-    def setup(self):
-        self.mJy = np.arange(1., 5.).reshape(2, 2) * u.mag(u.Jy)
-        self.m1 = np.arange(1., 5.5, 0.5).reshape(3, 3) * u.mag()
-        self.mags = (self.mJy, self.m1)
-
-    def test_power(self):
-        assert np.all(np.power(self.mJy, 0.) == 1.)
-        assert np.all(np.power(self.m1, 1.) == self.m1)
-        assert np.all(np.power(self.mJy, 1.) == self.mJy)
-        assert np.all(np.power(self.m1, 2.) == self.m1 ** 2)
-        with pytest.raises(u.UnitsError):
-            np.power(self.mJy, 2.)
-
-    def test_not_implemented_with_physical_unit(self):
-        with pytest.raises(u.UnitsError):
-            np.square(self.mJy)
-        assert np.all(np.square(self.m1) == self.m1 ** 2)

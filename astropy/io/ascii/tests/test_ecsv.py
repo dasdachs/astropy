@@ -14,17 +14,17 @@ from io import StringIO
 import pytest
 import numpy as np
 
-from ....table import Table, Column, QTable, NdarrayMixin
-from ....table.table_helpers import simple_table
-from ....coordinates import SkyCoord, Latitude, Longitude, Angle, EarthLocation
-from ....time import Time, TimeDelta
-from ....units import allclose as quantity_allclose
-from ....units import QuantityInfo
-from ....tests.helper import catch_warnings
+from astropy.table import Table, Column, QTable, NdarrayMixin
+from astropy.table.table_helpers import simple_table
+from astropy.coordinates import SkyCoord, Latitude, Longitude, Angle, EarthLocation
+from astropy.time import Time, TimeDelta
+from astropy.units import allclose as quantity_allclose
+from astropy.units import QuantityInfo
+from astropy.tests.helper import catch_warnings
 
-from ..ecsv import DELIMITERS
-from ... import ascii
-from .... import units as u
+from astropy.io.ascii.ecsv import DELIMITERS
+from astropy.io import ascii
+from astropy import units as u
 
 try:
     import yaml  # pylint: disable=W0611
@@ -258,7 +258,7 @@ el = EarthLocation(x=[1, 2] * u.km, y=[3, 4] * u.km, z=[5, 6] * u.km)
 sc = SkyCoord([1, 2], [3, 4], unit='deg,deg', frame='fk4',
               obstime='J1990.5')
 scc = sc.copy()
-scc.representation = 'cartesian'
+scc.representation_type = 'cartesian'
 tm = Time([51000.5, 51001.5], format='mjd', scale='tai', precision=5, location=el[0])
 tm2 = Time(tm, format='iso')
 tm3 = Time(tm, location=el)
@@ -291,9 +291,9 @@ compare_attrs = {
     'tm2': time_attrs,
     'tm3': time_attrs,
     'dt': ['shape', 'value', 'format', 'scale'],
-    'sc': ['ra', 'dec', 'representation', 'frame.name'],
-    'scc': ['x', 'y', 'z', 'representation', 'frame.name'],
-    'scd': ['ra', 'dec', 'distance', 'representation', 'frame.name'],
+    'sc': ['ra', 'dec', 'representation_type', 'frame.name'],
+    'scc': ['x', 'y', 'z', 'representation_type', 'frame.name'],
+    'scd': ['ra', 'dec', 'distance', 'representation_type', 'frame.name'],
     'q': ['value', 'unit'],
     'lon': ['value', 'unit', 'wrap_angle'],
     'lat': ['value', 'unit'],

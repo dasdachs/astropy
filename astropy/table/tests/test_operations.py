@@ -6,15 +6,15 @@ from collections import OrderedDict
 import pytest
 import numpy as np
 
-from ...tests.helper import catch_warnings
-from ...table import Table, QTable, TableMergeError
-from ...table.operations import _get_out_class
-from ... import units as u
-from ...utils import metadata
-from ...utils.metadata import MergeConflictError
-from ... import table
-from ...time import Time
-from ...coordinates import SkyCoord
+from astropy.tests.helper import catch_warnings
+from astropy.table import Table, QTable, TableMergeError
+from astropy.table.operations import _get_out_class
+from astropy import units as u
+from astropy.utils import metadata
+from astropy.utils.metadata import MergeConflictError
+from astropy import table
+from astropy.time import Time
+from astropy.coordinates import SkyCoord
 
 
 def sort_eq(list1, list2):
@@ -24,7 +24,7 @@ def sort_eq(list1, list2):
 def skycoord_equal(sc1, sc2):
     if not sc1.is_equivalent_frame(sc2):
         return False
-    if sc1.representation is not sc2.representation:  # Will be representation_type..
+    if sc1.representation_type is not sc2.representation_type:
         return False
     if sc1.shape != sc2.shape:
         return False  # Maybe raise ValueError corresponding to future numpy behavior

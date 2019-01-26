@@ -8,15 +8,15 @@ import pytest
 import numpy as np
 from numpy.testing import assert_allclose
 
-from ... import units as u
-from ...tests.helper import (assert_quantity_allclose as
+from astropy import units as u
+from astropy.tests.helper import (assert_quantity_allclose as
                              assert_allclose_quantity, catch_warnings)
-from ...utils import isiterable
-from ...utils.compat import NUMPY_LT_1_14
-from ...utils.exceptions import AstropyDeprecationWarning
-from ..angles import Longitude, Latitude, Angle
-from ..distances import Distance
-from ..representation import (REPRESENTATION_CLASSES,
+from astropy.utils import isiterable
+from astropy.utils.compat import NUMPY_LT_1_14
+from astropy.utils.exceptions import AstropyDeprecationWarning
+from astropy.coordinates.angles import Longitude, Latitude, Angle
+from astropy.coordinates.distances import Distance
+from astropy.coordinates.representation import (REPRESENTATION_CLASSES,
                               DIFFERENTIAL_CLASSES,
                               BaseRepresentation,
                               SphericalRepresentation,
@@ -193,6 +193,23 @@ class TestSphericalRepresentation:
         with pytest.raises(TypeError):
             len(s)
         assert not isiterable(s)
+
+    def test_nan_distance(self):
+        """ This is a regression test: calling represent_as() and passing in the
+            same class as the object shouldn't round-trip through cartesian.
+        """
+
+        sph = SphericalRepresentation(1*u.deg, 2*u.deg, np.nan*u.kpc)
+        new_sph = sph.represent_as(SphericalRepresentation)
+        assert_allclose_quantity(new_sph.lon, sph.lon)
+        assert_allclose_quantity(new_sph.lat, sph.lat)
+
+        dif = SphericalCosLatDifferential(1*u.mas/u.yr, 2*u.mas/u.yr,
+                                          3*u.km/u.s)
+        sph = sph.with_differentials(dif)
+        new_sph = sph.represent_as(SphericalRepresentation)
+        assert_allclose_quantity(new_sph.lon, sph.lon)
+        assert_allclose_quantity(new_sph.lat, sph.lat)
 
 
 class TestUnitSphericalRepresentation:
@@ -1017,8 +1034,9 @@ def test_representation_str_multi_d():
             ' [(2., 11., 20.), (5., 14., 23.), (8., 17., 26.)]] m')
 
 
+@pytest.mark.remote_data
 def test_subclass_representation():
-    from ..builtin_frames import ICRS
+    from astropy.coordinates.builtin_frames import ICRS
 
     class Longitude180(Longitude):
         def __new__(cls, angle, unit=None, wrap_angle=180 * u.deg, **kwargs):
@@ -1030,7 +1048,6 @@ def test_subclass_representation():
         attr_classes = OrderedDict([('lon', Longitude180),
                                     ('lat', Latitude),
                                     ('distance', u.Quantity)])
-        recommended_units = {'lon': u.deg, 'lat': u.deg}
 
     class ICRSWrap180(ICRS):
         frame_specific_representation_info = ICRS._frame_specific_representation_info.copy()
@@ -1497,3 +1514,13 @@ def test_unitphysics(unitphysics):
     assert assph.lon == obj.phi
     assert assph.lat == 80*u.deg
     assert_allclose_quantity(assph.distance, 1*u.dimensionless_unscaled)
+
+
+def test_distance_warning(recwarn):
+    SphericalRepresentation(1*u.deg, 2*u.deg, 1*u.kpc)
+    with pytest.raises(ValueError) as excinfo:
+        SphericalRepresentation(1*u.deg, 2*u.deg, -1*u.kpc)
+    assert 'Distance must be >= 0' in str(excinfo.value)
+    # second check is because the "originating" ValueError says the above,
+    # while the representation one includes the below
+    assert 'you must explicitly pass' in str(excinfo.value)

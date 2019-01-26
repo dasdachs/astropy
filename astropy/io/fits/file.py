@@ -3,6 +3,7 @@
 
 import bz2
 import gzip
+import errno
 import http.client
 import mmap
 import operator
@@ -22,9 +23,9 @@ import numpy as np
 from .util import (isreadable, iswritable, isfile, fileobj_open, fileobj_name,
                    fileobj_closed, fileobj_mode, _array_from_file,
                    _array_to_file, _write_string)
-from ...utils.data import download_file, _is_url
-from ...utils.decorators import classproperty, deprecated_renamed_argument
-from ...utils.exceptions import AstropyUserWarning
+from astropy.utils.data import download_file, _is_url
+from astropy.utils.decorators import classproperty, deprecated_renamed_argument
+from astropy.utils.exceptions import AstropyUserWarning
 
 
 # Maps astropy.io.fits-specific file mode names to the appropriate file
@@ -304,9 +305,30 @@ class _File:
                     self._file.seek(0, 0)
                     # This would also work:
                     # self._file.seek(0, 2)   # moves to the end
-                    self._mmap = mmap.mmap(self._file.fileno(), 0,
-                                           access=access_mode,
-                                           offset=0)
+                    try:
+                        self._mmap = mmap.mmap(self._file.fileno(), 0,
+                                               access=access_mode,
+                                               offset=0)
+                    except OSError as exc:
+                        # NOTE: mode='readonly' results in the memory-mapping
+                        # using the ACCESS_COPY mode in mmap so that users can
+                        # modify arrays. However, on some systems, the OS raises
+                        # a '[Errno 12] Cannot allocate memory' OSError if the
+                        # address space is smaller than the file. The solution
+                        # is to open the file in mode='denywrite', which at
+                        # least allows the file to be opened even if the
+                        # resulting arrays will be truly read-only.
+                        if exc.errno == errno.ENOMEM and self.mode == 'readonly':
+                            warnings.warn("Could not memory map array with "
+                                          "mode='readonly', falling back to "
+                                          "mode='denywrite', which means that "
+                                          "the array will be read-only",
+                                          AstropyUserWarning)
+                            self._mmap = mmap.mmap(self._file.fileno(), 0,
+                                                   access=MEMMAP_MODES['denywrite'],
+                                                   offset=0)
+                        else:
+                            raise
 
                 return np.ndarray(shape=shape, dtype=dtype, offset=offset,
                                   buffer=self._mmap)

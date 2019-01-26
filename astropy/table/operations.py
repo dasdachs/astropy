@@ -16,9 +16,9 @@ from collections.abc import Mapping, Sequence
 
 import numpy as np
 
-from ..utils import metadata
+from astropy.utils import metadata
 from .table import Table, QTable, Row, Column
-from ..units import Quantity
+from astropy.units import Quantity
 
 from . import _np_utils
 from .np_utils import fix_column_name, TableMergeError
@@ -693,7 +693,7 @@ def _join(left, right, keys=None, join_type='inner',
     diffs = np.concatenate(([True], out_keys[1:] != out_keys[:-1], [True]))
     idxs = np.flatnonzero(diffs)
 
-    # Main inner loop in Cython to compute the cartesion product
+    # Main inner loop in Cython to compute the cartesian product
     # indices for the given join type
     int_join_type = {'inner': 0, 'outer': 1, 'left': 2, 'right': 3}[join_type]
     masked, n_out, left_out, left_mask, right_out, right_mask = \

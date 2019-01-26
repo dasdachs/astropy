@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
-from ... import units as u
-from ...utils.compat import namedtuple_asdict
-from .. import representation as r
-from ..transformations import DynamicMatrixTransform, FunctionTransform
-from ..baseframe import (frame_transform_graph, RepresentationMapping,
+from astropy import units as u
+from astropy.utils.compat import namedtuple_asdict
+from astropy.coordinates import representation as r
+from astropy.coordinates.transformations import DynamicMatrixTransform, FunctionTransform
+from astropy.coordinates.baseframe import (frame_transform_graph, RepresentationMapping,
                          BaseCoordinateFrame)
-from ..attributes import CoordinateAttribute, QuantityAttribute
-from ..matrix_utilities import (rotation_matrix,
+from astropy.coordinates.attributes import CoordinateAttribute, QuantityAttribute
+from astropy.coordinates.matrix_utilities import (rotation_matrix,
                                 matrix_product, matrix_transpose)
 
 _skyoffset_cache = {}
@@ -131,7 +131,9 @@ class SkyOffsetFrame(BaseCoordinateFrame):
     representation : `BaseRepresentation` or None
         A representation object or None to have no data (or use the other keywords)
     origin : `SkyCoord` or low-level coordinate object.
-        the coordinate which specifies the origin of this frame.
+        The coordinate which specifies the origin of this frame. Note that this
+        origin is used purely for on-sky location/rotation.  It can have a
+        ``distance`` but it will not be used by this ``SkyOffsetFrame``.
     rotation : `~astropy.coordinates.Angle` or `~astropy.units.Quantity` with angle units
         The final rotation of the frame about the ``origin``. The sign of
         the rotation is the left-hand rule.  That is, an object at a

@@ -16,14 +16,14 @@ try:
 except ImportError:
     HAVE_OBJGRAPH = False
 
-from ....io import fits
-from ....tests.helper import catch_warnings, ignore_warnings
-from ....utils.compat import NUMPY_LT_1_14_1, NUMPY_LT_1_14_2
-from ....utils.exceptions import AstropyDeprecationWarning
+from astropy.io import fits
+from astropy.tests.helper import catch_warnings, ignore_warnings
+from astropy.utils.compat import NUMPY_LT_1_14_1, NUMPY_LT_1_14_2
+from astropy.utils.exceptions import AstropyDeprecationWarning, AstropyUserWarning
 
-from ..column import Delayed, NUMPY2FITS
-from ..util import decode_ascii
-from ..verify import VerifyError
+from astropy.io.fits.column import Delayed, NUMPY2FITS
+from astropy.io.fits.util import decode_ascii
+from astropy.io.fits.verify import VerifyError
 from . import FitsTestCase
 
 
@@ -2926,6 +2926,15 @@ class TestColumnFunctions(FitsTestCase):
 
         pytest.raises(TypeError, fits.ColDefs, [1, 2, 3])
 
+    def test_coldefs_init_from_array(self):
+        """Test that ColDefs._init_from_array works with single element data-
+        types as well as multi-element data-types
+        """
+        nd_array = np.ndarray((1,), dtype=[('A', '<u4', (2,)), ('B', 'uint16')])
+        col_defs = fits.column.ColDefs(nd_array)
+        assert 2**31 == col_defs['A'].bzero
+        assert 2**15 == col_defs['B'].bzero
+
     def test_pickle(self):
         """
         Regression test for https://github.com/astropy/astropy/issues/1597
@@ -2960,7 +2969,9 @@ class TestColumnFunctions(FitsTestCase):
             # Doesn't pickle zero-width (_phanotm) column 'ORBPARM'
             zwc_pd = pickle.dumps(zwc[2].data)
             zwc_pl = pickle.loads(zwc_pd)
-            assert comparerecords(zwc_pl, zwc[2].data)
+            with pytest.warns(UserWarning, match='Field 2 has a repeat count '
+                              'of 0 in its format code'):
+                assert comparerecords(zwc_pl, zwc[2].data)
 
     def test_column_lookup_by_name(self):
         """Tests that a `ColDefs` can be indexed by column name."""
@@ -3111,7 +3122,7 @@ def test_regression_5383():
 
 
 def test_table_to_hdu():
-    from ....table import Table
+    from astropy.table import Table
     table = Table([[1, 2, 3], ['a', 'b', 'c'], [2.3, 4.5, 6.7]],
                     names=['a', 'b', 'c'], dtype=['i', 'U1', 'f'])
     table['a'].unit = 'm/s'

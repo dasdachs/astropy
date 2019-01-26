@@ -6,14 +6,14 @@ from abc import ABCMeta, abstractmethod
 
 import numpy as np
 
-from .. import (Unit, UnitBase, UnitsError, UnitTypeError,
-                dimensionless_unscaled, Quantity)
+from astropy.units import (Unit, UnitBase, UnitsError, UnitTypeError,
+                           dimensionless_unscaled, Quantity)
 
 __all__ = ['FunctionUnitBase', 'FunctionQuantity']
 
 SUPPORTED_UFUNCS = set(getattr(np.core.umath, ufunc) for ufunc in (
     'isfinite', 'isinf', 'isnan', 'sign', 'signbit',
-    'rint', 'floor', 'ceil', 'trunc', 'power',
+    'rint', 'floor', 'ceil', 'trunc',
     '_ones_like', 'ones_like', 'positive') if hasattr(np.core.umath, ufunc))
 
 # TODO: the following could work if helper changed relative to Quantity:
@@ -508,7 +508,7 @@ class FunctionQuantity(Quantity):
         """
         return self._new_view(unit=self.unit.function_unit)
 
-    # ↓↓↓ methods overridden to change the behaviour
+    # ↓↓↓ methods overridden to change the behavior
     @property
     def si(self):
         """Return a copy with the physical unit in SI units."""
@@ -526,7 +526,7 @@ class FunctionQuantity(Quantity):
         """
         return self.__class__(self.physical.decompose(bases))
 
-    # ↓↓↓ methods overridden to add additional behaviour
+    # ↓↓↓ methods overridden to add additional behavior
     def __quantity_subclass__(self, unit):
         if isinstance(unit, FunctionUnitBase):
             return self.__class__, True
@@ -547,7 +547,19 @@ class FunctionQuantity(Quantity):
 
         self._unit = unit
 
-    # ↓↓↓ methods overridden to change behaviour
+    def __array_ufunc__(self, function, method, *inputs, **kwargs):
+        # TODO: it would be more logical to have this in Quantity already,
+        # instead of in UFUNC_HELPERS, where it cannot be overridden.
+        # And really it should just return NotImplemented, since possibly
+        # another argument might know what to do.
+        if function not in self._supported_ufuncs:
+            raise UnitTypeError(
+                "Cannot use ufunc '{0}' with function quantities"
+                .format(function.__name__))
+
+        return super().__array_ufunc__(function, method, *inputs, **kwargs)
+
+    # ↓↓↓ methods overridden to change behavior
     def __mul__(self, other):
         if self.unit.physical_unit == dimensionless_unscaled:
             return self._function_view * other
@@ -631,3 +643,18 @@ class FunctionQuantity(Quantity):
         raise TypeError("Cannot use method that uses function '{0}' with "
                         "function quantities that are not dimensionless."
                         .format(function.__name__))
+
+    # Override functions that are supported but do not use _wrap_function
+    # in Quantity.
+    def max(self, axis=None, out=None, keepdims=False):
+        return self._wrap_function(np.max, axis, out=out, keepdims=keepdims)
+
+    def min(self, axis=None, out=None, keepdims=False):
+        return self._wrap_function(np.min, axis, out=out, keepdims=keepdims)
+
+    def sum(self, axis=None, dtype=None, out=None, keepdims=False):
+        return self._wrap_function(np.sum, axis, dtype, out=out,
+                                   keepdims=keepdims)
+
+    def cumsum(self, axis=None, dtype=None, out=None):
+        return self._wrap_function(np.cumsum, axis, dtype, out=out)

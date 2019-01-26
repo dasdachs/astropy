@@ -5,13 +5,13 @@ import pytest
 import os
 
 from . import FitsTestCase
-from ..convenience import writeto
-from ..hdu import PrimaryHDU, hdulist
-from .. import Header, ImageHDU, HDUList
-from ..scripts import fitsdiff
-from ....tests.helper import catch_warnings
-from ....utils.exceptions import AstropyDeprecationWarning
-from ....version import version
+from astropy.io.fits.convenience import writeto
+from astropy.io.fits.hdu import PrimaryHDU, hdulist
+from astropy.io.fits import Header, ImageHDU, HDUList
+from astropy.io.fits.scripts import fitsdiff
+from astropy.tests.helper import catch_warnings
+from astropy.utils.exceptions import AstropyDeprecationWarning
+from astropy.version import version
 
 
 class TestFITSDiff_script(FitsTestCase):
@@ -248,7 +248,9 @@ No differences found.\n""".format(version, tmp_a, tmp_b)
         tmp_d = self.temp('sub/')
         assert fitsdiff.main(["-q", self.data_dir, tmp_d]) == 1
         assert fitsdiff.main(["-q", tmp_d, self.data_dir]) == 1
-        assert fitsdiff.main(["-q", self.data_dir, self.data_dir]) == 0
+        with pytest.warns(UserWarning, match="Field 'ORBPARM' has a repeat "
+                          "count of 0 in its format code"):
+            assert fitsdiff.main(["-q", self.data_dir, self.data_dir]) == 0
 
         # no match
         tmp_c = self.data('arange.fits')
@@ -257,7 +259,10 @@ No differences found.\n""".format(version, tmp_a, tmp_b)
         assert "'arange.fits' has no match in" in err
 
         # globbing
-        assert fitsdiff.main(["-q", self.data_dir+'/*.fits', self.data_dir]) == 0
+        with pytest.warns(UserWarning, match="Field 'ORBPARM' has a repeat "
+                          "count of 0 in its format code"):
+            assert fitsdiff.main(["-q", self.data_dir+'/*.fits',
+                                  self.data_dir]) == 0
         assert fitsdiff.main(["-q", self.data_dir+'/g*.fits', tmp_d]) == 0
 
         # one file and a directory
@@ -285,3 +290,24 @@ No differences found.\n""".format(version, tmp_a, tmp_b)
 
         numdiff = fitsdiff.main([tmp_a, tmp_b, "-u", "SCI"])
         assert numdiff == 0
+
+    def test_ignore_hdus_report(self, capsys):
+        a = np.arange(100).reshape(10, 10)
+        b = a.copy() + 1
+        ha = Header([('A', 1), ('B', 2), ('C', 3)])
+        phdu_a = PrimaryHDU(header=ha)
+        phdu_b = PrimaryHDU(header=ha)
+        ihdu_a = ImageHDU(data=a, name='SCI')
+        ihdu_b = ImageHDU(data=b, name='SCI')
+        hdulist_a = HDUList([phdu_a, ihdu_a])
+        hdulist_b = HDUList([phdu_b, ihdu_b])
+        tmp_a = self.temp('testa.fits')
+        tmp_b = self.temp('testb.fits')
+        hdulist_a.writeto(tmp_a)
+        hdulist_b.writeto(tmp_b)
+
+        numdiff = fitsdiff.main([tmp_a, tmp_b, "-u", "SCI"])
+        assert numdiff == 0
+        out, err = capsys.readouterr()
+        assert "testa.fits" in out
+        assert "testb.fits" in out

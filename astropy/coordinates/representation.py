@@ -17,13 +17,13 @@ import astropy.units as u
 
 from .angles import Angle, Longitude, Latitude
 from .distances import Distance
-from .._erfa import ufunc as erfa_ufunc
-from ..utils import ShapedLikeNDArray, classproperty
+from astropy._erfa import ufunc as erfa_ufunc
+from astropy.utils import ShapedLikeNDArray, classproperty
 
-from ..utils import deprecated_attribute
-from ..utils.exceptions import AstropyDeprecationWarning
-from ..utils.misc import InheritDocstrings
-from ..utils.compat import NUMPY_LT_1_14
+from astropy.utils import deprecated_attribute
+from astropy.utils.exceptions import AstropyDeprecationWarning
+from astropy.utils.misc import InheritDocstrings
+from astropy.utils.compat import NUMPY_LT_1_14
 
 __all__ = ["BaseRepresentationOrDifferential", "BaseRepresentation",
            "CartesianRepresentation", "SphericalRepresentation",
@@ -41,6 +41,26 @@ __all__ = ["BaseRepresentationOrDifferential", "BaseRepresentation",
 # classes get registered automatically.
 REPRESENTATION_CLASSES = {}
 DIFFERENTIAL_CLASSES = {}
+
+# a hash for the content of the above two dicts, cached for speed.
+_REPRDIFF_HASH = None
+def get_reprdiff_cls_hash():
+    """
+    Returns a hash value that should be invariable if the
+    `REPRESENTATION_CLASSES` and `DIFFERENTIAL_CLASSES` dictionaries have not
+    changed.
+    """
+    global _REPRDIFF_HASH
+    if _REPRDIFF_HASH is None:
+        _REPRDIFF_HASH = (hash(tuple(REPRESENTATION_CLASSES.items())) +
+                          hash(tuple(DIFFERENTIAL_CLASSES.items())) )
+    return _REPRDIFF_HASH
+
+
+def _invalidate_reprdiff_cls_hash():
+    global _REPRDIFF_HASH
+    _REPRDIFF_HASH = None
+
 
 
 # recommended_units deprecation message; if the attribute is removed later,
@@ -420,6 +440,7 @@ class MetaBaseRepresentation(InheritDocstrings, abc.ABCMeta):
                              .format(repr_name))
 
         REPRESENTATION_CLASSES[repr_name] = cls
+        _invalidate_reprdiff_cls_hash()
 
         # define getters for any component that does not yet have one.
         for component in cls.attr_classes:
@@ -664,8 +685,11 @@ class BaseRepresentation(BaseRepresentationOrDifferential,
                                  "must be a class, not a string. For "
                                  "strings, use frame objects")
 
-            # The default is to convert via cartesian coordinates
-            new_rep = other_class.from_cartesian(self.to_cartesian())
+            if other_class is not self.__class__:
+                # The default is to convert via cartesian coordinates
+                new_rep = other_class.from_cartesian(self.to_cartesian())
+            else:
+                new_rep = self
 
             new_rep._differentials = self._re_represent_differentials(
                 new_rep, differential_class)
@@ -1542,7 +1566,16 @@ class SphericalRepresentation(BaseRepresentation):
         super().__init__(lon, lat, distance, copy=copy,
                          differentials=differentials)
         if self._distance.unit.physical_type == 'length':
-            self._distance = self._distance.view(Distance)
+            try:
+                self._distance = Distance(self._distance, copy=False)
+            except ValueError as e:
+                if e.args[0].startswith('Distance must be >= 0'):
+                    raise ValueError("Distance must be >= 0. To allow negative "
+                                     "distance values, you must explicitly pass"
+                                     " in a `Distance` object with the the "
+                                     "argument 'allow_negative=True'.")
+                else:
+                    raise
 
     @property
     def _compatible_differentials(self):
@@ -1645,6 +1678,11 @@ class SphericalRepresentation(BaseRepresentation):
             Vector norm, with the same shape as the representation.
         """
         return np.abs(self.distance)
+
+    def __neg__(self):
+        self._raise_if_has_differentials('negation')
+        return self.__class__(self.lon + 180. * u.deg, -self.lat, self.distance,
+                              copy=False)
 
 
 class PhysicsSphericalRepresentation(BaseRepresentation):
@@ -1944,6 +1982,7 @@ class MetaBaseDifferential(InheritDocstrings, abc.ABCMeta):
                              .format(repr_name))
 
         DIFFERENTIAL_CLASSES[repr_name] = cls
+        _invalidate_reprdiff_cls_hash()
 
         # If not defined explicitly, create properties for the components.
         for component in cls.attr_classes:
@@ -2006,13 +2045,22 @@ class BaseDifferential(BaseRepresentationOrDifferential,
             d_comp = getattr(self, 'd_{0}'.format(name), None)
             if d_comp is not None:
                 d_unit = comp.unit / d_comp.unit
-                # Get the si unit without a scale by going via Quantity;
-                # `.si` causes the scale to be included in the value.
-                return str(u.Quantity(1., d_unit).si.unit)
+
+                # This is quite a bit faster than using to_system() or going
+                # through Quantity()
+                d_unit_si = d_unit.decompose(u.si.bases)
+                d_unit_si._scale = 1 # remove the scale from the unit
+
+                return str(d_unit_si)
 
         else:
-            raise RuntimeError("Invalid representation-differential match! Not "
-                               "sure how we got into this state.")
+            raise RuntimeError("Invalid representation-differential units! This"
+                               " likely happened because either the "
+                               "representation or the associated differential "
+                               "have non-standard units. Check that the input "
+                               "positional data have positional units, and the "
+                               "input velocity data have velocity units, or "
+                               "are both dimensionless.")
 
     @classmethod
     def _get_base_vectors(cls, base):
@@ -2465,7 +2513,7 @@ class SphericalDifferential(BaseSphericalDifferential):
 
 
 class BaseSphericalCosLatDifferential(BaseDifferential):
-    """Differtials from points on a spherical base representation.
+    """Differentials from points on a spherical base representation.
 
     With cos(lat) assumed to be included in the longitude differential.
     """

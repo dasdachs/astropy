@@ -8,10 +8,10 @@ import pytest
 import numpy as np
 from numpy.testing import assert_allclose
 
-from ... import units as u
-from .. import quantity_helper as qh
-from ..._erfa import ufunc as erfa_ufunc
-from ...tests.helper import raises
+from astropy import units as u
+from astropy.units import quantity_helper as qh
+from astropy._erfa import ufunc as erfa_ufunc
+from astropy.tests.helper import raises
 
 try:
     import scipy  # pylint: disable=W0611
@@ -310,6 +310,26 @@ class TestQuantityMathFuncs:
     def test_multiply_array(self):
         assert np.all(np.multiply(np.arange(3.) * u.m, 2. / u.s) ==
                       np.arange(0, 6., 2.) * u.m / u.s)
+
+    @pytest.mark.skipif(not isinstance(getattr(np, 'matmul', None), np.ufunc),
+                        reason="np.matmul is not yet a gufunc")
+    def test_matmul(self):
+        q = np.arange(3.) * u.m
+        r = np.matmul(q, q)
+        assert r == 5. * u.m ** 2
+        # less trivial case.
+        q1 = np.eye(3) * u.m
+        q2 = np.array([[[1., 0., 0.],
+                        [0., 1., 0.],
+                        [0., 0., 1.]],
+                       [[0., 1., 0.],
+                        [0., 0., 1.],
+                        [1., 0., 0.]],
+                       [[0., 0., 1.],
+                        [1., 0., 0.],
+                        [0., 1., 0.]]]) / u.s
+        r2 = np.matmul(q1, q2)
+        assert np.all(r2 == np.matmul(q1.value, q2.value) * q1.unit * q2.unit)
 
     @pytest.mark.parametrize('function', (np.divide, np.true_divide))
     def test_divide_scalar(self, function):

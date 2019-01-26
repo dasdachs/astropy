@@ -1,20 +1,21 @@
 # -*- coding: utf-8 -*-
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
 
+import warnings
 
 import pytest
 import numpy as np
 from numpy import testing as npt
 
-from ... import units as u
-from ...time import Time
-from ..builtin_frames import ICRS, AltAz
-from ..builtin_frames.utils import get_jd12
-from .. import EarthLocation
-from .. import SkyCoord
-from ...tests.helper import catch_warnings
-from ... import _erfa as erfa
-from ...utils import iers
+from astropy import units as u
+from astropy.time import Time
+from astropy.coordinates.builtin_frames import ICRS, AltAz
+from astropy.coordinates.builtin_frames.utils import get_jd12
+from astropy.coordinates import EarthLocation
+from astropy.coordinates import SkyCoord
+from astropy.tests.helper import catch_warnings
+from astropy import _erfa as erfa
+from astropy.utils import iers
 from .utils import randomly_sample_sphere
 
 
@@ -29,7 +30,10 @@ def fullstack_icrs():
 def fullstack_fiducial_altaz(fullstack_icrs):
     altazframe = AltAz(location=EarthLocation(lat=0*u.deg, lon=0*u.deg, height=0*u.m),
                        obstime=Time('J2000'))
-    return fullstack_icrs.transform_to(altazframe)
+    with warnings.catch_warnings():  # Ignore remote_data warning
+        warnings.simplefilter('ignore')
+        result = fullstack_icrs.transform_to(altazframe)
+    return result
 
 
 @pytest.fixture(scope="function", params=['J2000.1', 'J2010'])
@@ -69,6 +73,7 @@ def _erfa_check(ira, idec, astrom):
     return dct
 
 
+@pytest.mark.remote_data
 def test_iau_fullstack(fullstack_icrs, fullstack_fiducial_altaz,
                        fullstack_times, fullstack_locations,
                        fullstack_obsconditions):
@@ -133,6 +138,7 @@ def test_iau_fullstack(fullstack_icrs, fullstack_fiducial_altaz,
     npt.assert_allclose(erfadct['az'], aacoo.az.radian, atol=1e-7)
 
 
+@pytest.mark.remote_data
 def test_fiducial_roudtrip(fullstack_icrs, fullstack_fiducial_altaz):
     """
     Test the full transform from ICRS <-> AltAz
@@ -151,11 +157,11 @@ def test_future_altaz():
     warning is raised when attempting to get to AltAz in the future (beyond
     IERS tables)
     """
-    from ...utils.exceptions import AstropyWarning
+    from astropy.utils.exceptions import AstropyWarning
 
     # this is an ugly hack to get the warning to show up even if it has already
     # appeared
-    from ..builtin_frames import utils
+    from astropy.coordinates.builtin_frames import utils
     if hasattr(utils, '__warningregistry__'):
         utils.__warningregistry__.clear()
 

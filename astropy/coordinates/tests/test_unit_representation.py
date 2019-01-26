@@ -1,20 +1,20 @@
 """
-This file tests the behaviour of subclasses of Representation and Frames
+This file tests the behavior of subclasses of Representation and Frames
 """
-
 from copy import deepcopy
 from collections import OrderedDict
+
+import pytest
 
 from astropy.coordinates import Longitude, Latitude
 from astropy.coordinates.representation import (REPRESENTATION_CLASSES,
                                                 SphericalRepresentation,
-                                                UnitSphericalRepresentation)
+                                                UnitSphericalRepresentation,
+                                                _invalidate_reprdiff_cls_hash)
 from astropy.coordinates.baseframe import frame_transform_graph
 from astropy.coordinates.transformations import FunctionTransform
 from astropy.coordinates import ICRS
 from astropy.coordinates.baseframe import RepresentationMapping
-
-from .. import representation as r
 
 import astropy.units as u
 
@@ -33,8 +33,10 @@ def setup_function(func):
 def teardown_function(func):
     REPRESENTATION_CLASSES.clear()
     REPRESENTATION_CLASSES.update(func.REPRESENTATION_CLASSES_ORIG)
+    _invalidate_reprdiff_cls_hash()
 
 
+@pytest.mark.remote_data
 def test_unit_representation_subclass():
 
     class Longitude180(Longitude):
@@ -46,13 +48,11 @@ def test_unit_representation_subclass():
     class UnitSphericalWrap180Representation(UnitSphericalRepresentation):
         attr_classes = OrderedDict([('lon', Longitude180),
                                     ('lat', Latitude)])
-        recommended_units = {'lon': u.deg, 'lat': u.deg}
 
     class SphericalWrap180Representation(SphericalRepresentation):
         attr_classes = OrderedDict([('lon', Longitude180),
                                     ('lat', Latitude),
                                     ('distance', u.Quantity)])
-        recommended_units = {'lon': u.deg, 'lat': u.deg}
 
         _unit_representation = UnitSphericalWrap180Representation
 

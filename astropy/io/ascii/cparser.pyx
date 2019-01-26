@@ -1,4 +1,5 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
+#cython: language_level=3
 
 import csv
 import os
@@ -387,7 +388,8 @@ cdef class CParser:
             else:
                 self.raise_error("an error occurred while parsing table data")
         elif self.tokenizer.num_rows == 0: # no data
-            return ([np.array([], dtype=np.int_)] * self.width, [])
+            return ([np.array([], dtype=np.int_)] * self.width,
+                    self._get_comments(self.tokenizer))
         self._set_fill_values()
         cdef int num_rows = self.tokenizer.num_rows
         if self.data_end is not None and self.data_end < 0: # negative indexing
@@ -414,7 +416,8 @@ cdef class CParser:
 
         if offset == source_len: # no data
             return (dict((name, np.array([], dtype=np.int_)) for name in
-                         self.names), [])
+                         self.names),
+                    self._get_comments(self.tokenizer))
 
         cdef long chunksize = math.ceil((source_len - offset) / float(N))
         cdef list chunkindices = [offset]
@@ -1032,6 +1035,7 @@ cdef class FastWriter:
         # store all the rows in memory at one time (inefficient)
         # or fail to take advantage of the speed boost of writerows()
         # over writerow().
+        cdef int i = -1
         cdef int N = 100
         cdef int num_cols = <int>len(self.use_names)
         cdef int num_rows = <int>len(self.table)
@@ -1079,7 +1083,7 @@ cdef class FastWriter:
                 writer.writerows(rows)
 
         # Write leftover rows not included in previous chunks
-        if i % N != N - 1:
+        if i >= 0 and i % N != N - 1:
             writer.writerows(rows[:i % N + 1])
 
         if opened_file:

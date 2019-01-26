@@ -43,8 +43,8 @@ import builtins
 import numpy as np
 
 # LOCAL
-from .. import log
-from ..io import fits
+from astropy import log
+from astropy.io import fits
 from . import _docutil as __
 try:
     from . import _wcs
@@ -54,8 +54,13 @@ except ImportError:
     else:
         _wcs = None
 
-from ..utils.compat import possible_filename
-from ..utils.exceptions import AstropyWarning, AstropyUserWarning, AstropyDeprecationWarning
+from astropy.utils.compat import possible_filename
+from astropy.utils.exceptions import AstropyWarning, AstropyUserWarning, AstropyDeprecationWarning
+
+
+# Mix-in class that provides the APE 14 API
+from .wcsapi.fitswcs import FITSWCSAPIMixin
+
 
 __all__ = ['FITSFixedWarning', 'WCS', 'find_all_wcs',
            'DistortionLookupTable', 'Sip', 'Tabprm', 'Wcsprm',
@@ -69,6 +74,10 @@ __all__ = ['FITSFixedWarning', 'WCS', 'find_all_wcs',
 
 __doctest_skip__ = ['WCS.all_world2pix']
 
+NAXIS_DEPRECATE_MESSAGE = """
+Private attributes "_naxis1" and "_naxis2" have been deprecated since v3.1.
+Instead use the "pixel_shape" property which returns a list of NAXISj keyword values.
+"""
 
 if _wcs is not None:
     _parsed_version = _wcs.__version__.split('.')
@@ -212,10 +221,12 @@ class FITSFixedWarning(AstropyWarning):
     pass
 
 
-class WCS(WCSBase):
+class WCS(FITSWCSAPIMixin, WCSBase):
     """WCS objects perform standard WCS transformations, and correct for
     `SIP`_ and `distortion paper`_ table-lookup transformations, based
     on the WCS keywords and supplementary data read from a FITS file.
+
+    See also: http://docs.astropy.org/en/stable/wcs/
 
     Parameters
     ----------
@@ -508,6 +519,8 @@ reduce these to 2 dimensions using the naxis kwarg.
         for fd in close_fds:
             fd.close()
 
+        self._pixel_bounds = None
+
     def __copy__(self):
         new_copy = self.__class__()
         WCSBase.__init__(new_copy, self.sip,
@@ -693,9 +706,8 @@ reduce these to 2 dimensions using the naxis kwarg.
                 try:
                     # classes that inherit from WCS and define naxis1/2
                     # do not require a header parameter
-                    naxis1 = self._naxis1
-                    naxis2 = self._naxis2
-                except AttributeError:
+                    naxis1, naxis2 = self.pixel_shape
+                except (AttributeError, TypeError):
                     warnings.warn("Need a valid header in order to calculate footprint\n", AstropyUserWarning)
                     return None
             else:
@@ -1635,9 +1647,7 @@ reduce these to 2 dimensions using the naxis kwarg.
         # (when any of the non-CD-matrix-based corrections are
         # present). If not required return the initial
         # approximation (pix0).
-        if self.sip is None and \
-           self.cpdis1 is None and self.cpdis2 is None and \
-           self.det2im1 is None and self.det2im2 is None:
+        if not self.has_distortion:
             # No non-WCS corrections detected so
             # simply return initial approximation:
             return pix0
@@ -2666,23 +2676,29 @@ reduce these to 2 dimensions using the naxis kwarg.
             f.write(comments)
             f.write('{}\n'.format(coordsys))
             f.write('polygon(')
-            self.calc_footprint().tofile(f, sep=',')
-            f.write(') # color={0}, width={1:d} \n'.format(color, width))
+            ftpr = self.calc_footprint()
+            if ftpr is not None:
+                ftpr.tofile(f, sep=',')
+                f.write(') # color={0}, width={1:d} \n'.format(color, width))
 
     @property
     def _naxis1(self):
+        warnings.warn(NAXIS_DEPRECATE_MESSAGE, AstropyDeprecationWarning)
         return self._naxis[0]
 
     @_naxis1.setter
     def _naxis1(self, value):
+        warnings.warn(NAXIS_DEPRECATE_MESSAGE, AstropyDeprecationWarning)
         self._naxis[0] = value
 
     @property
     def _naxis2(self):
+        warnings.warn(NAXIS_DEPRECATE_MESSAGE, AstropyDeprecationWarning)
         return self._naxis[1]
 
     @_naxis2.setter
     def _naxis2(self, value):
+        warnings.warn(NAXIS_DEPRECATE_MESSAGE, AstropyDeprecationWarning)
         self._naxis[1] = value
 
     def _get_naxis(self, header=None):
@@ -2976,7 +2992,7 @@ reduce these to 2 dimensions using the naxis kwarg.
 
             try:
                 # range requires integers but the other attributes can also
-                # handle arbitary values, so this needs to be in a try/except.
+                # handle arbitrary values, so this needs to be in a try/except.
                 nitems = len(builtins.range(self._naxis[wcs_index])[iview])
             except TypeError as exc:
                 if 'indices must be integers' not in str(exc):
@@ -3042,6 +3058,15 @@ reduce these to 2 dimensions using the naxis kwarg.
             return False
 
     @property
+    def has_distortion(self):
+        """
+        Returns `True` if any distortion terms are present.
+        """
+        return (self.sip is not None or
+                self.cpdis1 is not None or self.cpdis2 is not None or
+                self.det2im1 is not None and self.det2im2 is not None)
+
+    @property
     def pixel_scale_matrix(self):
 
         try:
@@ -3081,8 +3106,27 @@ reduce these to 2 dimensions using the naxis kwarg.
         and this will generate a plot with the correct WCS coordinates on the
         axes.
         """
-        from ..visualization.wcsaxes import WCSAxes
+        from astropy.visualization.wcsaxes import WCSAxes
         return WCSAxes, {'wcs': self}
+
+    def footprint_contains(self, coord, **kwargs):
+        """
+        Determines if a given SkyCoord is contained in the wcs footprint.
+
+        Parameters
+        ----------
+        coord : `~astropy.coordinates.SkyCoord`
+            The coordinate to check if it is within the wcs coordinate.
+        **kwargs :
+           Additional arguments to pass to `~astropy.coordinates.SkyCoord.to_pixel`
+
+        Returns
+        -------
+        response : bool
+           True means the WCS footprint contains the coordinate, False means it does not.
+        """
+
+        return coord.contained_by(self, **kwargs)
 
 
 def __WCS_unpickle__(cls, dct, fits_data):

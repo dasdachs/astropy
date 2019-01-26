@@ -3,13 +3,15 @@
 
 import pytest
 
-asdf = pytest.importorskip('asdf', minversion='2.0.0.dev0')
+from astropy import __minimum_asdf_version__
+
+asdf = pytest.importorskip('asdf', minversion=__minimum_asdf_version__)
 from asdf.tests.helpers import assert_roundtrip_tree
 
 from astropy import units
 from astropy.coordinates import ICRS, FK5, Longitude, Latitude, Angle
 
-from ....extension import AstropyExtension
+from astropy.io.misc.asdf.extension import AstropyExtension
 
 
 def test_hcrs_basic(tmpdir):
@@ -18,7 +20,7 @@ def test_hcrs_basic(tmpdir):
 
     tree = {'coord': ICRS(ra=ra, dec=dec)}
 
-    assert_roundtrip_tree(tree, tmpdir, extensions=AstropyExtension())
+    assert_roundtrip_tree(tree, tmpdir)
 
 
 def test_icrs_basic(tmpdir):
@@ -28,13 +30,13 @@ def test_icrs_basic(tmpdir):
 
     tree = {'coord': ICRS(ra=ra, dec=dec)}
 
-    assert_roundtrip_tree(tree, tmpdir, extensions=AstropyExtension())
+    assert_roundtrip_tree(tree, tmpdir)
 
 
 def test_icrs_nodata(tmpdir):
     tree = {'coord': ICRS()}
 
-    assert_roundtrip_tree(tree, tmpdir, extensions=AstropyExtension())
+    assert_roundtrip_tree(tree, tmpdir)
 
 
 def test_icrs_compound(tmpdir):
@@ -43,11 +45,11 @@ def test_icrs_compound(tmpdir):
 
     tree = {'coord': icrs}
 
-    assert_roundtrip_tree(tree, tmpdir, extensions=AstropyExtension())
+    assert_roundtrip_tree(tree, tmpdir)
 
 
 def test_fk5_time(tmpdir):
 
     tree = {'coord': FK5(equinox="2011-01-01T00:00:00")}
 
-    assert_roundtrip_tree(tree, tmpdir, extensions=AstropyExtension())
+    assert_roundtrip_tree(tree, tmpdir)

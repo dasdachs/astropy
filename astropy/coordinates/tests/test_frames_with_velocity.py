@@ -5,12 +5,12 @@
 import pytest
 import numpy as np
 
-from ... import units as u
-from ..builtin_frames import ICRS, Galactic, Galactocentric
-from .. import builtin_frames as bf
-from ...units import allclose as quantity_allclose
-from ..errors import ConvertError
-from .. import representation as r
+from astropy import units as u
+from astropy.coordinates.builtin_frames import ICRS, Galactic, Galactocentric
+from astropy.coordinates import builtin_frames as bf
+from astropy.units import allclose as quantity_allclose
+from astropy.coordinates.errors import ConvertError
+from astropy.coordinates import representation as r
 
 def test_api():
     # transform observed Barycentric velocities to full-space Galactocentric
@@ -188,7 +188,7 @@ def test_differential_type_arg():
     Test passing in an explicit differential class to the initializer or
     changing the differential class via set_representation_cls
     """
-    from ..builtin_frames import ICRS
+    from astropy.coordinates.builtin_frames import ICRS
 
     icrs = ICRS(ra=1*u.deg, dec=60*u.deg,
                 pm_ra=10*u.mas/u.yr, pm_dec=-11*u.mas/u.yr,
@@ -214,7 +214,7 @@ def test_differential_type_arg():
     # specify both
     icrs = ICRS(x=1*u.pc, y=2*u.pc, z=3*u.pc,
                 v_x=1*u.km/u.s, v_y=2*u.km/u.s, v_z=3*u.km/u.s,
-                representation=r.CartesianRepresentation,
+                representation_type=r.CartesianRepresentation,
                 differential_type=r.CartesianDifferential)
     assert icrs.x == 1*u.pc
     assert icrs.y == 2*u.pc
@@ -281,3 +281,23 @@ def test_shorthand_attributes():
                  representation_type=r.CartesianRepresentation,
                  differential_type=r.CartesianDifferential)
     icrs4.radial_velocity
+
+
+def test_negative_distance():
+    """ Regression test: #7408
+    Make sure that negative parallaxes turned into distances are handled right
+    """
+
+    RA = 150 * u.deg
+    DEC = -11*u.deg
+    c = ICRS(ra=RA, dec=DEC,
+             distance=(-10*u.mas).to(u.pc, u.parallax()),
+             pm_ra_cosdec=10*u.mas/u.yr,
+             pm_dec=10*u.mas/u.yr)
+    assert quantity_allclose(c.ra, RA)
+    assert quantity_allclose(c.dec, DEC)
+
+    c = ICRS(ra=RA, dec=DEC,
+             distance=(-10*u.mas).to(u.pc, u.parallax()))
+    assert quantity_allclose(c.ra, RA)
+    assert quantity_allclose(c.dec, DEC)

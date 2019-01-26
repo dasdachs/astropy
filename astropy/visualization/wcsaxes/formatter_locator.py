@@ -15,9 +15,9 @@ import numpy as np
 
 from matplotlib import rcParams
 
-from ... import units as u
-from ...units import UnitsError
-from ...coordinates import Angle
+from astropy import units as u
+from astropy.units import UnitsError
+from astropy.coordinates import Angle
 
 DMS_RE = re.compile('^dd(:mm(:ss(.(s)+)?)?)?$')
 HMS_RE = re.compile('^hh(:mm(:ss(.(s)+)?)?)?$')
@@ -56,7 +56,7 @@ class BaseFormatterLocator:
 
     def __init__(self, values=None, number=None, spacing=None, format=None):
 
-        if (values, number, spacing).count(None) < 2:
+        if len([x for x in (values, number, spacing) if x is None]) < 2:
             raise ValueError("At most one of values/number/spacing can be specifed")
 
         if values is not None:

@@ -3,11 +3,11 @@
 
 import numpy as np
 
-from ... import units as u
-from ...utils.decorators import format_doc
-from .. import representation as r
-from ..baseframe import BaseCoordinateFrame, RepresentationMapping, base_doc
-from ..attributes import (Attribute, TimeAttribute,
+from astropy import units as u
+from astropy.utils.decorators import format_doc
+from astropy.coordinates import representation as r
+from astropy.coordinates.baseframe import BaseCoordinateFrame, RepresentationMapping, base_doc
+from astropy.coordinates.attributes import (Attribute, TimeAttribute,
                           QuantityAttribute, EarthLocationAttribute)
 
 __all__ = ['AltAz']
@@ -65,7 +65,7 @@ doc_footer = """
     The refraction model is based on that implemented in ERFA, which is fast
     but becomes inaccurate for altitudes below about 5 degrees.  Near and below
     altitudes of 0, it can even give meaningless answers, and in this case
-    transforming to AltAz and back to another frame can give highly discrepent
+    transforming to AltAz and back to another frame can give highly discrepant
     results.  For much better numerical stability, leaving the ``pressure`` at
     ``0`` (the default), disabling the refraction correction (yielding
     "topocentric" horizontal coordinates).

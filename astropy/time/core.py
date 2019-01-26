@@ -15,12 +15,12 @@ from time import strftime, strptime
 
 import numpy as np
 
-from .. import units as u, constants as const
-from .. import _erfa as erfa
-from ..units import UnitConversionError
-from ..utils import ShapedLikeNDArray
-from ..utils.compat.misc import override__dir__
-from ..utils.data_info import MixinInfo, data_info_factory
+from astropy import units as u, constants as const
+from astropy import _erfa as erfa
+from astropy.units import UnitConversionError
+from astropy.utils import ShapedLikeNDArray
+from astropy.utils.compat.misc import override__dir__
+from astropy.utils.data_info import MixinInfo, data_info_factory
 from .utils import day_frac
 from .formats import (TIME_FORMATS, TIME_DELTA_FORMATS,
                       TimeJD, TimeUnique, TimeAstropyTime, TimeDatetime)
@@ -28,6 +28,7 @@ from .formats import (TIME_FORMATS, TIME_DELTA_FORMATS,
 # making a custom timescale in the documentation.
 from .formats import TimeFromEpoch  # pylint: disable=W0611
 
+from astropy.extern import _strptime
 
 __all__ = ['Time', 'TimeDelta', 'TIME_SCALES', 'STANDARD_TIME_SCALES', 'TIME_DELTA_SCALES',
            'ScaleValueError', 'OperandTypeError', 'TimeInfo']
@@ -244,6 +245,52 @@ class TimeDeltaInfo(TimeInfo):
     def _construct_from_dict(self, map):
         return self._construct_from_dict_base(map)
 
+    def new_like(self, cols, length, metadata_conflicts='warn', name=None):
+        """
+        Return a new TimeDelta instance which is consistent with the input Time objects
+        ``cols`` and has ``length`` rows.
+
+        This is intended for creating an empty Time instance whose elements can
+        be set in-place for table operations like join or vstack.  It checks
+        that the input locations and attributes are consistent.  This is used
+        when a Time object is used as a mixin column in an astropy Table.
+
+        Parameters
+        ----------
+        cols : list
+            List of input columns (Time objects)
+        length : int
+            Length of the output column object
+        metadata_conflicts : str ('warn'|'error'|'silent')
+            How to handle metadata conflicts
+        name : str
+            Output column name
+
+        Returns
+        -------
+        col : Time (or subclass)
+            Empty instance of this class consistent with ``cols``
+
+        """
+        # Get merged info attributes like shape, dtype, format, description, etc.
+        attrs = self.merge_cols_attributes(cols, metadata_conflicts, name,
+                                           ('meta', 'description'))
+        attrs.pop('dtype')  # Not relevant for Time
+        col0 = cols[0]
+
+        # Make a new Time object with the desired shape and attributes
+        shape = (length,) + attrs.pop('shape')
+        jd1 = np.zeros(shape, dtype='f8')
+        jd2 = np.zeros(shape, dtype='f8')
+        out = self._parent_cls(jd1, jd2, format='jd', scale=col0.scale)
+        out.format = col0.format
+
+        # Set remaining info attributes
+        for attr, value in attrs.items():
+            setattr(out.info, attr, value)
+
+        return out
+
 
 class Time(ShapedLikeNDArray):
     """
@@ -260,8 +307,10 @@ class Time(ShapedLikeNDArray):
 
       >>> list(Time.FORMATS)
       ['jd', 'mjd', 'decimalyear', 'unix', 'cxcsec', 'gps', 'plot_date',
-       'datetime', 'iso', 'isot', 'yday', 'fits', 'byear', 'jyear', 'byear_str',
-       'jyear_str']
+       'datetime', 'iso', 'isot', 'yday', 'datetime64', 'fits', 'byear',
+       'jyear', 'byear_str', 'jyear_str']
+
+    See also: http://docs.astropy.org/en/stable/time/
 
     Parameters
     ----------
@@ -324,7 +373,7 @@ class Time(ShapedLikeNDArray):
                  location=None, copy=False):
 
         if location is not None:
-            from ..coordinates import EarthLocation
+            from astropy.coordinates import EarthLocation
             if isinstance(location, EarthLocation):
                 self.location = location
             else:
@@ -423,7 +472,7 @@ class Time(ShapedLikeNDArray):
         guess available formats and stop when one matches.
         """
 
-        if format is None and val.dtype.kind in ('S', 'U', 'O'):
+        if format is None and val.dtype.kind in ('S', 'U', 'O', 'M'):
             formats = [(name, cls) for name, cls in self.FORMATS.items()
                        if issubclass(cls, TimeUnique)]
             err_msg = ('any of the formats where the format keyword is '
@@ -518,8 +567,10 @@ class Time(ShapedLikeNDArray):
                              op_dtypes=[time_array.dtype, 'U30'])
 
         for time, formatted in iterator:
-            time_tuple = strptime(to_string(time), format_string)
-            formatted[...] = '{:04}-{}-{}T{}:{}:{}'.format(*time_tuple)
+            tt, fraction = _strptime._strptime(to_string(time), format_string)
+            time_tuple = tt[:6] + (fraction,)
+            formatted[...] = '{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:06}'\
+                .format(*time_tuple)
 
         format = kwargs.pop('format', None)
         out = cls(*iterator.operands[1:], format='isot', **kwargs)
@@ -549,8 +600,8 @@ class Time(ShapedLikeNDArray):
 
           >>> list(Time.FORMATS)
           ['jd', 'mjd', 'decimalyear', 'unix', 'cxcsec', 'gps', 'plot_date',
-           'datetime', 'iso', 'isot', 'yday', 'fits', 'byear', 'jyear', 'byear_str',
-           'jyear_str']
+           'datetime', 'iso', 'isot', 'yday', 'datetime64', 'fits', 'byear',
+           'jyear', 'byear_str', 'jyear_str']
         """
         return self._format
 
@@ -608,7 +659,11 @@ class Time(ShapedLikeNDArray):
             datetime_tuple = (sk['year'], sk['mon'], sk['day'],
                               sk['hour'], sk['min'], sk['sec'],
                               date_tuple[6], date_tuple[7], -1)
-            formatted_strings.append(strftime(format_spec, datetime_tuple))
+            fmtd_str = format_spec
+            if '%f' in fmtd_str:
+                fmtd_str = fmtd_str.replace('%f', '{frac:0{precision}}'.format(frac=sk['fracsec'], precision=self.precision))
+            fmtd_str = strftime(fmtd_str, datetime_tuple)
+            formatted_strings.append(fmtd_str)
 
         if self.isscalar:
             return formatted_strings[0]
@@ -771,6 +826,8 @@ class Time(ShapedLikeNDArray):
 
     def _shaped_like_input(self, value):
         out = value
+        if value.dtype.kind == 'M':
+            return value[()]
         if not self._time.jd1.shape and not np.ma.is_masked(value):
             out = value.item()
         return out
@@ -807,6 +864,80 @@ class Time(ShapedLikeNDArray):
     @property
     def mask(self):
         return self._time.mask
+
+    def insert(self, obj, values, axis=0):
+        """
+        Insert values before the given indices in the column and return
+        a new `~astropy.time.Time` or  `~astropy.time.TimeDelta` object.
+
+        The values to be inserted must conform to the rules for in-place setting
+        of ``Time`` objects (see ``Get and set values`` in the ``Time``
+        documentation).
+
+        The API signature matches the ``np.insert`` API, but is more limited.
+        The specification of insert index ``obj`` must be a single integer,
+        and the ``axis`` must be ``0`` for simple row insertion before the
+        index.
+
+        Parameters
+        ----------
+        obj : int
+            Integer index before which ``values`` is inserted.
+        values : array_like
+            Value(s) to insert.  If the type of ``values`` is different
+            from that of quantity, ``values`` is converted to the matching type.
+        axis : int, optional
+            Axis along which to insert ``values``.  Default is 0, which is the
+            only allowed value and will insert a row.
+
+        Returns
+        -------
+        out : `~astropy.time.Time` subclass
+            New time object with inserted value(s)
+
+        """
+        # Validate inputs: obj arg is integer, axis=0, self is not a scalar, and
+        # input index is in bounds.
+        try:
+            idx0 = operator.index(obj)
+        except TypeError:
+            raise TypeError('obj arg must be an integer')
+
+        if axis != 0:
+            raise ValueError('axis must be 0')
+
+        if not self.shape:
+            raise TypeError('cannot insert into scalar {} object'
+                            .format(self.__class__.__name__))
+
+        if abs(idx0) > len(self):
+            raise IndexError('index {} is out of bounds for axis 0 with size {}'
+                             .format(idx0, len(self)))
+
+        # Turn negative index into positive
+        if idx0 < 0:
+            idx0 = len(self) + idx0
+
+        # For non-Time object, use numpy to help figure out the length.  (Note annoying
+        # case of a string input that has a length which is not the length we want).
+        if not isinstance(values, Time):
+            values = np.asarray(values)
+        n_values = len(values) if values.shape else 1
+
+        # Finally make the new object with the correct length and set values for the
+        # three sections, before insert, the insert, and after the insert.
+        out = self.__class__.info.new_like([self], len(self) + n_values, name=self.info.name)
+
+        out._time.jd1[:idx0] = self._time.jd1[:idx0]
+        out._time.jd2[:idx0] = self._time.jd2[:idx0]
+
+        # This uses the Time setting machinery to coerce and validate as necessary.
+        out[idx0:idx0 + n_values] = values
+
+        out._time.jd1[idx0 + n_values:] = self._time.jd1[idx0:]
+        out._time.jd2[idx0 + n_values:] = self._time.jd2[idx0:]
+
+        return out
 
     def _make_value_equivalent(self, item, value):
         """Coerce setitem value into an equivalent Time object"""
@@ -921,7 +1052,7 @@ class Time(ShapedLikeNDArray):
                                  'corrections')
             location = self.location
 
-        from ..coordinates import (UnitSphericalRepresentation, CartesianRepresentation,
+        from astropy.coordinates import (UnitSphericalRepresentation, CartesianRepresentation,
                                    HCRS, ICRS, GCRS, solar_system_ephemeris)
 
         # ensure sky location is ICRS compatible
@@ -986,7 +1117,7 @@ class Time(ShapedLikeNDArray):
             Sidereal time as a quantity with units of hourangle
         """  # docstring is formatted below
 
-        from ..coordinates import Longitude
+        from astropy.coordinates import Longitude
 
         if kind.lower() not in SIDEREAL_TIME_MODELS.keys():
             raise ValueError('The kind of sidereal time has to be {0}'.format(
@@ -1027,7 +1158,7 @@ class Time(ShapedLikeNDArray):
     def _erfa_sidereal_time(self, model):
         """Calculate a sidereal time using a IAU precession/nutation model."""
 
-        from ..coordinates import Longitude
+        from astropy.coordinates import Longitude
 
         erfa_function = model['function']
         erfa_parameters = [getattr(getattr(self, scale)._time, jd_part)
@@ -1492,7 +1623,7 @@ class Time(ShapedLikeNDArray):
             array([ True, False]...)
         """
         if iers_table is None:
-            from ..utils.iers import IERS
+            from astropy.utils.iers import IERS
             iers_table = IERS.open()
 
         return iers_table.ut1_utc(self.utc, return_status=return_status)
@@ -1508,7 +1639,7 @@ class Time(ShapedLikeNDArray):
         # Sec. 4.3.1: the arg DUT is the quantity delta_UT1 = UT1 - UTC in
         # seconds. It is obtained from tables published by the IERS.
         if not hasattr(self, '_delta_ut1_utc'):
-            from ..utils.iers import IERS_Auto
+            from astropy.utils.iers import IERS_Auto
             iers_table = IERS_Auto.open()
             # jd1, jd2 are normally set (see above), except if delta_ut1_utc
             # is access directly; ensure we behave as expected for that case
@@ -1570,7 +1701,7 @@ class Time(ShapedLikeNDArray):
             ut = day_frac(njd1 - 0.5, njd2)[1]
 
             if self.location is None:
-                from ..coordinates import EarthLocation
+                from astropy.coordinates import EarthLocation
                 location = EarthLocation.from_geodetic(0., 0., 0.)
             else:
                 location = self.location
@@ -1789,6 +1920,11 @@ class TimeDelta(Time):
     this requires knowledge of the actual times, not just their difference. For
     a similar reason, 'utc' is not a valid scale for a time difference: a UTC
     day is not always 86400 seconds.
+
+    See also:
+
+    - http://docs.astropy.org/en/stable/time/
+    - http://docs.astropy.org/en/stable/time/index.html#time-deltas
 
     Parameters
     ----------
@@ -2016,13 +2152,10 @@ class TimeDelta(Time):
         """Coerce setitem value into an equivalent TimeDelta object"""
         if not isinstance(value, TimeDelta):
             try:
-                value = self.__class__(value, scale=self.scale)
-            except Exception:
-                try:
-                    value = self.__class__(value, scale=self.scale, format=self.format)
-                except Exception as err:
-                    raise ValueError('cannot convert value to a compatible TimeDelta '
-                                     'object: {}'.format(err))
+                value = self.__class__(value, scale=self.scale, format=self.format)
+            except Exception as err:
+                raise ValueError('cannot convert value to a compatible TimeDelta '
+                                 'object: {}'.format(err))
         return value
 
 
@@ -2045,7 +2178,7 @@ def _make_array(val, copy=False):
     # Allow only float64, string or object arrays as input
     # (object is for datetime, maybe add more specific test later?)
     # This also ensures the right byteorder for float64 (closes #2942).
-    if not (val.dtype == np.float64 or val.dtype.kind in 'OSUa'):
+    if not (val.dtype == np.float64 or val.dtype.kind in 'OSUMa'):
         val = np.asanyarray(val, dtype=np.float64)
 
     return val

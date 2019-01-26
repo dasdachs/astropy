@@ -5,13 +5,15 @@ import fnmatch
 import time
 import re
 import datetime
+import warnings
 from collections import OrderedDict, defaultdict
 
 import numpy as np
 
-from ..utils.decorators import lazyproperty
-from .. import units as u
-from .. import _erfa as erfa
+from astropy.utils.decorators import lazyproperty
+from astropy.utils.exceptions import AstropyDeprecationWarning
+from astropy import units as u
+from astropy import _erfa as erfa
 from .utils import day_frac, quantity_day_frac, two_sum, two_product
 
 
@@ -23,7 +25,7 @@ __all__ = ['TimeFormat', 'TimeJD', 'TimeMJD', 'TimeFromEpoch', 'TimeUnix',
            'TimeDeltaFormat', 'TimeDeltaSec', 'TimeDeltaJD',
            'TimeEpochDateString', 'TimeBesselianEpochString',
            'TimeJulianEpochString', 'TIME_FORMATS', 'TIME_DELTA_FORMATS',
-           'TimezoneInfo', 'TimeDeltaDatetime']
+           'TimezoneInfo', 'TimeDeltaDatetime', 'TimeDatetime64']
 
 __doctest_skip__ = ['TimePlotDate']
 
@@ -969,18 +971,53 @@ class TimeYearDayTime(TimeISO):
                 '{year:d}:{yday:03d}'))
 
 
+class TimeDatetime64(TimeISOT):
+    name = 'datetime64'
+
+    def _check_val_type(self, val1, val2):
+        # Note: don't care about val2 for this class`
+        if not val1.dtype.kind == 'M':
+            raise TypeError('Input values for {0} class must be '
+                            'datetime64 objects'.format(self.name))
+        return val1, None
+
+    def set_jds(self, val1, val2):
+        # If there are any masked values in the ``val1`` datetime64 array
+        # ('NaT') then stub them with a valid date so downstream parse_string
+        # will work.  The value under the mask is arbitrary but a "modern" date
+        # is good.
+        mask = np.isnat(val1)
+        masked = np.any(mask)
+        if masked:
+            val1 = val1.copy()
+            val1[mask] = '2000'
+
+        # Make sure M(onth) and Y(ear) dates will parse and convert to bytestring
+        if val1.dtype.name in ['datetime64[M]', 'datetime64[Y]']:
+            val1 = val1.astype('datetime64[D]')
+        val1 = val1.astype('S')
+
+        # Standard ISO string parsing now
+        super().set_jds(val1, val2)
+
+        # Finally apply mask if necessary
+        if masked:
+            self.jd2[mask] = np.nan
+
+    @property
+    def value(self):
+        precision = self.precision
+        self.precision = 9
+        ret = super().value
+        self.precision = precision
+        return ret.astype('datetime64')
+
+
 class TimeFITS(TimeString):
     """
-    FITS format: "[±Y]YYYY-MM-DD[THH:MM:SS[.sss]][(SCALE[(REALIZATION)])]".
+    FITS format: "[±Y]YYYY-MM-DD[THH:MM:SS[.sss]]".
 
-    ISOT with two extensions:
-    - Can give signed five-digit year (mostly for negative years);
-    - A possible time scale (and realization) appended in parentheses.
-
-    Note: FITS supports some deprecated names for timescales; these are
-    translated to the formal names upon initialization.  Furthermore, any
-    specific realization information is stored only as long as the time scale
-    is not changed.
+    ISOT but can give signed five-digit year (mostly for negative years);
 
     The allowed subformats are:
 
@@ -1008,15 +1045,15 @@ class TimeFITS(TimeString):
          r'(?P<year>[+-]\d{5})-(?P<mon>\d\d)-(?P<mday>\d\d)',
          '{year:+06d}-{mon:02d}-{day:02d}'))
     # Add the regex that parses the scale and possible realization.
+    # Support for this is deprecated.  Read old style but no longer write
+    # in this style.
     subfmts = tuple(
         (subfmt[0],
          subfmt[1] + r'(\((?P<scale>\w+)(\((?P<realization>\w+)\))?\))?',
          subfmt[2]) for subfmt in subfmts)
-    _fits_scale = None
-    _fits_realization = None
 
     def parse_string(self, timestr, subfmts):
-        """Read time and set scale according to trailing scale codes."""
+        """Read time and deprecated scale if present"""
         # Try parsing with any of the allowed sub-formats.
         for _, regex, _ in subfmts:
             tm = re.match(regex, timestr)
@@ -1026,7 +1063,11 @@ class TimeFITS(TimeString):
             raise ValueError('Time {0} does not match {1} format'
                              .format(timestr, self.name))
         tm = tm.groupdict()
+        # Scale and realization are deprecated and strings in this form
+        # are no longer created.  We issue a warning but still use the value.
         if tm['scale'] is not None:
+            warnings.warn("FITS time strings should no longer have embedded time scale.",
+                          AstropyDeprecationWarning)
             # If a scale was given, translate from a possible deprecated
             # timescale identifier to the scale used by Time.
             fits_scale = tm['scale'].upper()
@@ -1035,32 +1076,18 @@ class TimeFITS(TimeString):
                 raise ValueError("Scale {0!r} is not in the allowed scales {1}"
                                  .format(scale, sorted(TIME_SCALES)))
             # If no scale was given in the initialiser, set the scale to
-            # that given in the string.  Also store a possible realization,
-            # so we can round-trip (as long as no scale changes are made).
-            fits_realization = (tm['realization'].upper()
-                                if tm['realization'] else None)
-            if self._fits_scale is None:
-                self._fits_scale = fits_scale
-                self._fits_realization = fits_realization
-                if self._scale is None:
-                    self._scale = scale
-            if (scale != self.scale or fits_scale != self._fits_scale or
-                fits_realization != self._fits_realization):
+            # that given in the string.  Realization is ignored
+            # and is only supported to allow old-style strings to be
+            # parsed.
+            if self._scale is None:
+                self._scale = scale
+            if scale != self.scale:
                 raise ValueError("Input strings for {0} class must all "
                                  "have consistent time scales."
                                  .format(self.name))
         return [int(tm['year']), int(tm['mon']), int(tm['mday']),
                 int(tm.get('hour', 0)), int(tm.get('min', 0)),
                 float(tm.get('sec', 0.))]
-
-    def format_string(self, str_fmt, **kwargs):
-        """Format time-string: append the scale to the normal ISOT format."""
-        time_str = super().format_string(str_fmt, **kwargs)
-        if self._fits_scale and self._fits_realization:
-            return '{0}({1}({2}))'.format(time_str, self._fits_scale,
-                                          self._fits_realization)
-        else:
-            return '{0}({1})'.format(time_str, self._scale.upper())
 
     @property
     def value(self):
